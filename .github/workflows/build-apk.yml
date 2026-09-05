@@ -42,18 +42,11 @@ jobs:
 
       - name: Publish APK to GitHub Releases
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: CleanCut v1.0.0
+          body: "Нативний Android-застосунок CleanCut для автоматичного видалення фону (Google ML Kit Subject Segmentation). Готовий до встановлення на смартфон."
+          files: app/build/outputs/apk/debug/app-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG_NAME=${GITHUB_REF_NAME:-v1.0.0}
-          if [ "$TAG_NAME" = "main" ] || [ "$TAG_NAME" = "master" ]; then
-            TAG_NAME="v1.0.0"
-          fi
-          
-          # Rename apk for clean direct download
-          cp app/build/outputs/apk/debug/app-debug.apk CleanCut.apk
-          
-          gh release create "$TAG_NAME" CleanCut.apk \
-            --title "CleanCut $TAG_NAME" \
-            --notes "Нативний Android-застосунок CleanCut для автоматичного видалення фону (Google ML Kit Subject Segmentation). Готовий до встановлення на смартфон." \
-            --clobber || true

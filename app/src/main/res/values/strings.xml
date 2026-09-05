@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">CleanCut</string>
+    <string name="pick_image">Обрати зображення</string>
+    <string name="camera">Камера</string>
+    <string name="gallery">Галерея</string>
+    <string name="processing">Видалення фону...</string>
+    <string name="save">Зберегти</string>
+    <string name="share">Поділитися</string>
+    <string name="original">Оригінал</string>
+    <string name="cutout">Без фону</string>
+    <string name="error_prefix">Помилка обробки: </string>
+    <string name="saved_successfully">Зображення успішно збережено в Галерею</string>
+    <string name="save_failed">Не вдалося зберегти зображення</string>
+</resources>

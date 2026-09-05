@@ -11,8 +11,8 @@ android {
         applicationId = "com.cleancut.bgremover"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -68,6 +68,9 @@ dependencies {
 
     // Google ML Kit Subject Segmentation (On-Device Computer Vision)
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
+
+    // ONNX Runtime Mobile for RMBG-1.4 Studio Matting
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
 
     // Coroutines & Task Await for ML Kit
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")

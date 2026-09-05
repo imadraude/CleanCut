@@ -1,39 +1,28 @@
 # CleanCut: Застосунок для автоматичного видалення фону на Android
 
-CleanCut — сучасний нативний застосунок для Android, розроблений мовою **Kotlin** із використанням **Jetpack Compose** та офіційного API комп'ютерного зору **Google ML Kit Subject Segmentation**.
+CleanCut — сучасний нативний застосунок для Android, розроблений мовою **Kotlin** із використанням **Jetpack Compose**, подвійного рушія комп'ютерного зору (**Google ML Kit + Guided Filter** та **Bria AI RMBG-1.4 через ONNX Runtime Mobile**) і вбудованої системи автооновлень через GitHub Releases.
 
 Застосунок працює повністю локально на пристрої: жодних LLM, хмарних серверів чи витоку персональних даних.
 
 ---
 
-## Ключові технологічні рішення
+## Подвійна система сегментації (Гібридний рушій)
 
-1. **Google ML Kit Subject Segmentation API**:
-   - Офіційне сучасне рішення Google для виділення об'єктів (люди, тварини, предмети) на фото.
-   - Використовує апаратне прискорення пристрою (GPU / NPU Neural Networks API).
-   - Мінімальний розмір APK: модель оптимізована й динамічно завантажується службами Google Play Services.
-   - Швидкість роботи: типовий час обробки становить 30-100 мс залежно від роздільної здатності процесора.
+1. **Швидкий режим (Fast + Edge Refined)**:
+   - Працює на базі Google ML Kit Subject Segmentation API.
+   - Застосовує алгоритмічний **Guided Filter (керований фільтр)**: використовує повнорозмірне RGB-зображення як орієнтир для точного припасування меж м'якої маски до реальних колірних градієнтів об'єкта.
+   - Усуває колірний ореол фону (Defringing / Chromatic Bleed Removal) уздовж контурів волосся та одягу.
+   - Миттєва швидкість (30-60 мс) та 0 МБ додаткового розміру.
 
-2. **Clean Architecture (Глибокі модулі за принципом Codebase Design)**:
-   - **Domain**: Інтерфейс `SubjectSegmenter` приховує деталі реалізації від UI. Будь-який рушій (ML Kit, ONNX, TFLite) може бути підключений без змін у презентаційному шарі.
-   - **Data**: Адаптер `MlKitSubjectSegmenter` обробляє бінарні маски, альфа-канали ARGB_8888 та оптимізацію пам'яті.
-   - **Presentation**: Сучасний інтерфейс на **Jetpack Compose** та **Material 3**.
-
-3. **Оптимізація роботи із зображеннями**:
-   - `BitmapUtils` запобігає `OutOfMemoryError` завдяки інтелектуальному субсемплінгу великих фотографій (наприклад, 48MP/108MP з камер).
-   - Автоматичне виправлення орієнтації згідно з EXIF метаданими.
-   - Збереження результату в галерею через Scoped Storage (`MediaStore.Images`).
-   - Експорт через стандартний системний Android Sharesheet (`FileProvider`).
-
-4. **Можливості редактора**:
-   - Експорт чистого прозорого PNG з візуалізацією шахової сітки (checkerboard).
-   - Заміна фону на студійні однотонні пресети (білий, чорний, сірий, пастельні відтінки).
-   - Встановлення довільного власного зображення як нового фону.
-   - Масштабування жестами (Pinch-to-zoom / Pan) та миттєве порівняння з оригіналом.
+2. **Студійний режим (Studio RMBG-1.4 через ONNX Runtime)**:
+   - Працює на базі нейромережі **Bria AI RMBG-1.4** (DIS-5K) через **ONNX Runtime Mobile**.
+   - Виконує обчислення на тензорі високої роздільної здатності 1024x1024.
+   - Забезпечує найвищу студійну точність вирізання складних деталей: окремих пасм волосся, хутра тварин, напівпрозорих тканин та тонких предметів.
+   - Завантажується в один клік на вимогу користувача (~42 МБ), кешується в пам'яті смартфона та надалі працює 100% офлайн.
 
 ---
 
-## Структура проєкту
+## Архітектурний дизайн (Clean Architecture + Deep Modules)
 
 ```text
 BgRemoverAndroid/
@@ -45,30 +34,40 @@ BgRemoverAndroid/
 │       ├── java/com/cleancut/bgremover/
 │       │   ├── data/
 │       │   │   ├── ml/
-│       │   │   │   └── MlKitSubjectSegmenter.kt    // Адаптер ML Kit
+│       │   │   │   ├── GuidedFilter.kt             // Алгоритм керованої фільтрації країв
+│       │   │   │   ├── HybridSubjectSegmenter.kt   // Маршрутизатор між FAST та STUDIO
+│       │   │   │   ├── MlKitSubjectSegmenter.kt    // Адаптер ML Kit + GuidedFilter
+│       │   │   │   └── OnnxRmbgSegmenter.kt        // Адаптер ONNX Runtime Mobile (RMBG-1.4)
+│       │   │   ├── update/
+│       │   │   │   └── GitHubUpdateManager.kt      // Автооновлення через GitHub Releases API
 │       │   │   └── util/
 │       │   │       └── BitmapUtils.kt              // Маніпуляції з Bitmap, EXIF, MediaStore
 │       │   ├── domain/
 │       │   │   ├── model/
+│       │   │   │   ├── AppUpdate.kt                // Модель даних оновлення
+│       │   │   │   ├── SegmentationMode.kt         // Перелік режимів (FAST, STUDIO)
 │       │   │   │   └── SegmentationResult.kt       // Модель результату
 │       │   │   ├── repository/
-│       │   │   │   └── SubjectSegmenter.kt         // Інтерфейс (seam)
+│       │   │   │   ├── SubjectSegmenter.kt         // Інтерфейс сегментації (seam)
+│       │   │   │   └── UpdateManager.kt            // Інтерфейс оновлення застосунку
 │       │   │   └── usecase/
-│       │   │       └── SegmentImageUseCase.kt      // Сценарій використання
+│       │   │       └── SegmentImageUseCase.kt      // Сценарій сегментації
 │       │   └── ui/
 │       │       ├── MainActivity.kt                 // Вхідна точка Activity
 │       │       ├── components/
-│       │       │   ├── BackgroundSelector.kt       // Вибір фонів та пресетів
+│       │       │   ├── BackgroundSelector.kt       // Вибір фонів та кольорових пресетів
 │       │       │   ├── CheckerboardBackground.kt   // Шахова сітка прозорості
-│       │       │   └── ImagePreviewArea.kt         // Перегляд, зум, порівняння
+│       │       │   ├── ImagePreviewArea.kt         // Полотно, зум, панорамування, порівняння
+│       │       │   ├── QualityModeSelector.kt      // Перемикач Швидкий / Студійний
+│       │       │   └── UpdateDialog.kt             // Діалог перевірки та завантаження оновлень
 │       │       ├── screen/
-│       │       │   └── MainScreen.kt               // Головний екран (Idle, Processing, Success, Error)
+│       │       │   └── MainScreen.kt               // Головний екран
 │       │       ├── theme/
 │       │       │   ├── Color.kt
 │       │       │   ├── Theme.kt
 │       │       │   └── Type.kt
 │       │       └── viewmodel/
-│       │           └── MainViewModel.kt            // StateFlow та бізнес-логіка UI
+│       │           └── MainViewModel.kt            // StateFlow та реактивна бізнес-логіка
 │       └── res/
 │           ├── values/
 │           │   ├── strings.xml
@@ -85,27 +84,7 @@ BgRemoverAndroid/
 
 ---
 
-## Як відкрити та зібрати проєкт
-
-### Варіант 1: Через Android Studio (Рекомендовано)
-1. Відкрийте Android Studio.
-2. Оберіть **File -> Open** та вкажіть папку `BgRemoverAndroid`.
-3. Дочекайтеся завершення синхронізації Gradle.
-4. Підключіть Android-пристрій або запустіть емулятор.
-5. Натисніть **Run 'app'** (або комбінацію Shift + F10).
-
-### Варіант 2: Збірка через консоль (Gradle)
-Для компіляції APK виконайте команду в кореневій директорії проєкту:
-```bash
-./gradlew assembleDebug
-```
-Зібраний APK файл буде знаходитися за шляхом:
-`app/build/outputs/apk/debug/app-debug.apk`
-
----
-
-## Системні вимоги
-- **Android OS**: версія 7.0 (API 24) або новіша.
-- **Google Play Services**: підтримуються на переважній більшості сертифікованих Android-смартфонів.
-- **Java**: JDK 17.
-- **Gradle**: 8.4+.
+## Вбудована система автооновлень
+- Застосунок самостійно перевіряє вихід нових версій через публічний GitHub Releases API.
+- При виявленні нової версії з'являється діалогове вікно зі списком змін та кнопкою встановлення.
+- Завантаження виконується напряму з GitHub Actions, після чого відкривається стандартний інсталятор Android пакетів.

@@ -83,6 +83,8 @@ fun MainScreen(
     }
 
     val updateState by viewModel.updateState.collectAsState()
+    val segmentationMode by viewModel.segmentationMode.collectAsState()
+    val studioDownloadState by viewModel.studioDownloadState.collectAsState()
 
     // Show snackbar when there is a user message from segmentation
     val userMessage = (uiState as? MainUiState.Success)?.userMessage
@@ -109,6 +111,16 @@ fun MainScreen(
             downloadProgress = updateState.downloadProgress,
             onConfirmUpdate = { viewModel.startUpdateDownload() },
             onDismiss = { viewModel.dismissUpdateDialog() }
+        )
+    }
+
+    // Studio Model Download Dialog (RMBG-1.4)
+    if (studioDownloadState.showDialog) {
+        com.cleancut.bgremover.ui.components.DownloadStudioModelDialog(
+            isDownloading = studioDownloadState.isDownloading,
+            progress = studioDownloadState.downloadProgress,
+            onConfirmDownload = { viewModel.downloadStudioModel() },
+            onDismiss = { viewModel.dismissStudioDownloadDialog() }
         )
     }
 
@@ -186,6 +198,8 @@ fun MainScreen(
             when (val state = uiState) {
                 is MainUiState.Idle -> {
                     IdleStateContent(
+                        currentMode = segmentationMode,
+                        onModeSelected = { viewModel.setSegmentationMode(it) },
                         onPickPhoto = {
                             photoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -201,6 +215,8 @@ fun MainScreen(
                 is MainUiState.Success -> {
                     SuccessStateContent(
                         state = state,
+                        currentMode = segmentationMode,
+                        onModeSelected = { viewModel.setSegmentationMode(it) },
                         onSelectBackground = { viewModel.selectBackground(it) },
                         onPickCustomBg = {
                             bgPickerLauncher.launch(
@@ -229,6 +245,8 @@ fun MainScreen(
 
 @Composable
 private fun IdleStateContent(
+    currentMode: com.cleancut.bgremover.domain.model.SegmentationMode,
+    onModeSelected: (com.cleancut.bgremover.domain.model.SegmentationMode) -> Unit,
     onPickPhoto: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -266,14 +284,21 @@ private fun IdleStateContent(
         Spacer(modifier = Modifier.height(10.dp))
 
         Text(
-            text = "Локальна сегментація об'єктів на пристрої без передачі даних на сервер. Виберіть фотографію для початку.",
+            text = "Локальна сегментація об'єктів на пристрої без передачі даних на сервер. Оберіть режим якості та фотографію.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
 
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(20.dp))
+
+        com.cleancut.bgremover.ui.components.QualityModeSelector(
+            currentMode = currentMode,
+            onModeSelected = onModeSelected
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         Button(
             onClick = onPickPhoto,
@@ -328,6 +353,8 @@ private fun ProcessingStateContent(
 @Composable
 private fun SuccessStateContent(
     state: MainUiState.Success,
+    currentMode: com.cleancut.bgremover.domain.model.SegmentationMode,
+    onModeSelected: (com.cleancut.bgremover.domain.model.SegmentationMode) -> Unit,
     onSelectBackground: (com.cleancut.bgremover.data.util.BackgroundOption) -> Unit,
     onPickCustomBg: () -> Unit,
     onSave: () -> Unit,
@@ -337,12 +364,18 @@ private fun SuccessStateContent(
     Column(
         modifier = modifier.fillMaxSize()
     ) {
+        // Mode selector allowing immediate comparison between Fast and Studio
+        com.cleancut.bgremover.ui.components.QualityModeSelector(
+            currentMode = currentMode,
+            onModeSelected = onModeSelected
+        )
+
         // Main canvas with zoom, pan, and compare
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
         ) {
             ImagePreviewArea(
                 displayBitmap = state.compositeBitmap,

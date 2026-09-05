@@ -8,11 +8,12 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cleancut.bgremover.BuildConfig
-import com.cleancut.bgremover.data.ml.MlKitSubjectSegmenter
+import com.cleancut.bgremover.data.ml.HybridSubjectSegmenter
 import com.cleancut.bgremover.data.update.GitHubUpdateManager
 import com.cleancut.bgremover.data.util.BackgroundOption
 import com.cleancut.bgremover.data.util.BitmapUtils
 import com.cleancut.bgremover.domain.model.AppUpdate
+import com.cleancut.bgremover.domain.model.SegmentationMode
 import com.cleancut.bgremover.domain.repository.UpdateManager
 import com.cleancut.bgremover.domain.usecase.SegmentImageUseCase
 import kotlinx.coroutines.Dispatchers
@@ -46,9 +47,15 @@ data class UpdateUiState(
     val infoMessage: String? = null
 )
 
+data class StudioModelDownloadState(
+    val showDialog: Boolean = false,
+    val isDownloading: Boolean = false,
+    val downloadProgress: Int = 0
+)
+
 class MainViewModel(
     application: Application,
-    private val segmentUseCase: SegmentImageUseCase = SegmentImageUseCase(MlKitSubjectSegmenter()),
+    private val segmentUseCase: SegmentImageUseCase = SegmentImageUseCase(HybridSubjectSegmenter(application)),
     private val updateManager: UpdateManager = GitHubUpdateManager(application)
 ) : AndroidViewModel(application) {
 
@@ -58,9 +65,58 @@ class MainViewModel(
     private val _updateState = MutableStateFlow(UpdateUiState())
     val updateState: StateFlow<UpdateUiState> = _updateState.asStateFlow()
 
+    private val _segmentationMode = MutableStateFlow(SegmentationMode.FAST)
+    val segmentationMode: StateFlow<SegmentationMode> = _segmentationMode.asStateFlow()
+
+    private val _studioDownloadState = MutableStateFlow(StudioModelDownloadState())
+    val studioDownloadState: StateFlow<StudioModelDownloadState> = _studioDownloadState.asStateFlow()
+
+    private var currentInputBitmap: Bitmap? = null
+
     init {
         // Automatically check for newer releases in background on startup
         checkForUpdates(silent = true)
+    }
+
+    fun setSegmentationMode(mode: SegmentationMode) {
+        if (mode == SegmentationMode.STUDIO && !segmentUseCase.isStudioModelReady()) {
+            _studioDownloadState.update { it.copy(showDialog = true) }
+            return
+        }
+
+        _segmentationMode.value = mode
+        val bitmap = currentInputBitmap
+        if (bitmap != null && _uiState.value is MainUiState.Success) {
+            // Re-process current image with the new mode
+            processBitmap(bitmap, mode)
+        }
+    }
+
+    fun downloadStudioModel() {
+        _studioDownloadState.update { it.copy(isDownloading = true, downloadProgress = 0) }
+
+        viewModelScope.launch {
+            val result = segmentUseCase.downloadStudioModel { progress ->
+                _studioDownloadState.update { it.copy(downloadProgress = progress) }
+            }
+
+            result.onSuccess {
+                _studioDownloadState.update { it.copy(showDialog = false, isDownloading = false) }
+                _segmentationMode.value = SegmentationMode.STUDIO
+                currentInputBitmap?.let { bitmap ->
+                    processBitmap(bitmap, SegmentationMode.STUDIO)
+                }
+            }.onFailure { error ->
+                _studioDownloadState.update { it.copy(isDownloading = false) }
+                _updateState.update {
+                    it.copy(infoMessage = "Помилка завантаження моделі: ${error.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    fun dismissStudioDownloadDialog() {
+        _studioDownloadState.update { it.copy(showDialog = false) }
     }
 
     fun checkForUpdates(silent: Boolean = false) {
@@ -152,15 +208,30 @@ class MainViewModel(
                 return@launch
             }
 
-            _uiState.value = MainUiState.Processing("Аналіз та сегментація об'єктів...")
+            currentInputBitmap = inputBitmap
+            processBitmap(inputBitmap, _segmentationMode.value)
+        }
+    }
 
-            val result = segmentUseCase(inputBitmap)
+    private fun processBitmap(bitmap: Bitmap, mode: SegmentationMode) {
+        viewModelScope.launch {
+            val message = if (mode == SegmentationMode.FAST) {
+                "Аналіз об'єктів та оптимізація країв (Guided Filter)..."
+            } else {
+                "Студійна нейромережева сегментація (RMBG-1.4)..."
+            }
+            _uiState.value = MainUiState.Processing(message)
+
+            val result = segmentUseCase(bitmap, mode)
             result.onSuccess { segResult ->
+                val prevOption = (_uiState.value as? MainUiState.Success)?.backgroundOption ?: BackgroundOption.Transparent
+                val composite = BitmapUtils.compositeWithBackground(segResult.foregroundCutout, prevOption)
+
                 _uiState.value = MainUiState.Success(
                     originalBitmap = segResult.originalBitmap,
                     foregroundCutout = segResult.foregroundCutout,
-                    compositeBitmap = segResult.foregroundCutout,
-                    backgroundOption = BackgroundOption.Transparent,
+                    compositeBitmap = composite,
+                    backgroundOption = prevOption,
                     processingTimeMs = segResult.processingTimeMs
                 )
             }.onFailure { error ->
@@ -255,6 +326,7 @@ class MainViewModel(
     }
 
     fun reset() {
+        currentInputBitmap = null
         _uiState.value = MainUiState.Idle
     }
 

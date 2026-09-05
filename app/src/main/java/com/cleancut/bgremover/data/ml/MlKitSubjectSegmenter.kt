@@ -3,7 +3,6 @@ package com.cleancut.bgremover.data.ml
 import android.graphics.Bitmap
 import android.graphics.Color
 import com.cleancut.bgremover.domain.model.SegmentationResult
-import com.cleancut.bgremover.domain.repository.SubjectSegmenter
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
@@ -19,7 +18,7 @@ import kotlin.system.measureTimeMillis
  * Enhanced ML Kit Subject Segmenter combining Google ML Kit with
  * Guided Filter edge refinement and color defringing for crisp boundaries.
  */
-class MlKitSubjectSegmenter : SubjectSegmenter {
+class MlKitSubjectSegmenter {
 
     private val options = SubjectSegmenterOptions.Builder()
         .enableForegroundBitmap()
@@ -28,7 +27,7 @@ class MlKitSubjectSegmenter : SubjectSegmenter {
 
     private val client = SubjectSegmentation.getClient(options)
 
-    override suspend fun segment(bitmap: Bitmap): Result<SegmentationResult> = withContext(Dispatchers.Default) {
+    suspend fun segment(bitmap: Bitmap): Result<SegmentationResult> = withContext(Dispatchers.Default) {
         try {
             val inputImage = InputImage.fromBitmap(bitmap, 0)
             var cutoutBitmap: Bitmap? = null
@@ -108,7 +107,7 @@ class MlKitSubjectSegmenter : SubjectSegmenter {
         return outputBitmap
     }
 
-    override fun close() {
+    fun close() {
         client.close()
     }
 }

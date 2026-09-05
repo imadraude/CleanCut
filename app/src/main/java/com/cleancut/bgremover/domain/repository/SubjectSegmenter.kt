@@ -7,7 +7,7 @@ import java.io.File
 
 /**
  * Deep module interface for background removal and subject segmentation.
- * Supports both FAST (ML Kit + Guided Filter) and STUDIO (RMBG-1.4 ONNX) modes.
+ * Supports FAST (ML Kit + Guided Filter), STUDIO (RMBG-1.4), and ULTRA (BiRefNet).
  */
 interface SubjectSegmenter {
     /**
@@ -16,14 +16,14 @@ interface SubjectSegmenter {
     suspend fun segment(bitmap: Bitmap, mode: SegmentationMode = SegmentationMode.FAST): Result<SegmentationResult>
 
     /**
-     * Checks whether the high-precision studio model is present on the device.
+     * Checks whether the required neural model for the mode is cached on device.
      */
-    fun isStudioModelReady(): Boolean
+    fun isModelReady(mode: SegmentationMode): Boolean
 
     /**
-     * Downloads the studio model on-demand with progress reporting.
+     * Downloads the required neural model on-demand with progress reporting.
      */
-    suspend fun downloadStudioModel(onProgress: (Int) -> Unit): Result<File>
+    suspend fun downloadModel(mode: SegmentationMode, onProgress: (Int) -> Unit): Result<File>
 
     /**
      * Releases underlying ML hardware resources.

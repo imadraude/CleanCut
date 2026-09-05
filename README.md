@@ -1,28 +1,34 @@
 # CleanCut: Застосунок для автоматичного видалення фону на Android
 
-CleanCut — сучасний нативний застосунок для Android, розроблений мовою **Kotlin** із використанням **Jetpack Compose**, подвійного рушія комп'ютерного зору (**Google ML Kit + Guided Filter** та **Bria AI RMBG-1.4 через ONNX Runtime Mobile**) і вбудованої системи автооновлень через GitHub Releases.
+CleanCut — сучасний нативний застосунок для Android, розроблений мовою **Kotlin** із використанням **Jetpack Compose**, трирівневої системи комп'ютерного зору (**Google ML Kit + Guided Filter**, **Bria AI RMBG-1.4** та **BiRefNet-Lite через ONNX Runtime Mobile**) і вбудованої системи автооновлень через GitHub Releases.
 
 Застосунок працює повністю локально на пристрої: жодних LLM, хмарних серверів чи витоку персональних даних.
 
 ---
 
-## Подвійна система сегментації (Гібридний рушій)
+## Три рівні якості сегментації
 
-1. **Швидкий режим (Fast + Edge Refined)**:
-   - Працює на базі Google ML Kit Subject Segmentation API.
-   - Застосовує алгоритмічний **Guided Filter (керований фільтр)**: використовує повнорозмірне RGB-зображення як орієнтир для точного припасування меж м'якої маски до реальних колірних градієнтів об'єкта.
-   - Усуває колірний ореол фону (Defringing / Chromatic Bleed Removal) уздовж контурів волосся та одягу.
-   - Миттєва швидкість (30-60 мс) та 0 МБ додаткового розміру.
+1. **Швидкий режим (Fast + Guided Filter)**:
+   - Базується на Google ML Kit Subject Segmentation API.
+   - Застосовує алгоритмічний **Guided Filter (керований фільтр)** для усунення розмиття та припасування маски до RGB-градієнтів.
+   - Усуває паразитарне проникнення старого фону (Defringing).
+   - Швидкість: 30-60 мс, 0 МБ додаткового розміру.
 
-2. **Студійний режим (Studio RMBG-1.4 через ONNX Runtime)**:
-   - Працює на базі нейромережі **Bria AI RMBG-1.4** (DIS-5K) через **ONNX Runtime Mobile**.
-   - Виконує обчислення на тензорі високої роздільної здатності 1024x1024.
-   - Забезпечує найвищу студійну точність вирізання складних деталей: окремих пасм волосся, хутра тварин, напівпрозорих тканин та тонких предметів.
-   - Завантажується в один клік на вимогу користувача (~42 МБ), кешується в пам'яті смартфона та надалі працює 100% офлайн.
+2. **Студійний режим (Studio RMBG-1.4)**:
+   - Базується на моделі Bria AI RMBG-1.4 (ONNX Runtime Mobile).
+   - Обробка на тензорі 1024x1024.
+   - Висока точність для волосся, контурів та силуетів.
+   - Розмір: ~42 МБ (завантажується за запитом користувача в один клік).
+
+3. **Ультра режим (Ultra BiRefNet-Lite)**:
+   - Базується на еталонній світовій архітектурі **BiRefNet** (Bilateral Reference Network) зі Swin Transformer бекбоном.
+   - Двосторонні референсні зв'язки передають піксельні координати безпосередньо у вихідні шари декодера.
+   - Максимальна деталізація для найскладніших об'єктів: окремі пасма волосся, спиці коліс, напівпрозоре скло, мереживо, паркани та тонка геометрія.
+   - Розмір: ~213 МБ (завантажується за бажанням користувача, кешується офлайн).
 
 ---
 
-## Архітектурний дизайн (Clean Architecture + Deep Modules)
+## Архітектура проєкту (Clean Architecture)
 
 ```text
 BgRemoverAndroid/
@@ -35,31 +41,32 @@ BgRemoverAndroid/
 │       │   ├── data/
 │       │   │   ├── ml/
 │       │   │   │   ├── GuidedFilter.kt             // Алгоритм керованої фільтрації країв
-│       │   │   │   ├── HybridSubjectSegmenter.kt   // Маршрутизатор між FAST та STUDIO
-│       │   │   │   ├── MlKitSubjectSegmenter.kt    // Адаптер ML Kit + GuidedFilter
-│       │   │   │   └── OnnxRmbgSegmenter.kt        // Адаптер ONNX Runtime Mobile (RMBG-1.4)
+│       │   │   │   ├── HybridSubjectSegmenter.kt   // Трирівневий маршрутизатор (FAST, STUDIO, ULTRA)
+│       │   │   │   ├── MlKitSubjectSegmenter.kt    // ML Kit + GuidedFilter
+│       │   │   │   ├── OnnxBiRefNetSegmenter.kt    // BiRefNet-Lite via ONNX Runtime Mobile
+│       │   │   │   └── OnnxRmbgSegmenter.kt        // RMBG-1.4 via ONNX Runtime Mobile
 │       │   │   ├── update/
-│       │   │   │   └── GitHubUpdateManager.kt      // Автооновлення через GitHub Releases API
+│       │   │   │   └── GitHubUpdateManager.kt      // Автооновлення через GitHub Releases
 │       │   │   └── util/
 │       │   │       └── BitmapUtils.kt              // Маніпуляції з Bitmap, EXIF, MediaStore
 │       │   ├── domain/
 │       │   │   ├── model/
-│       │   │   │   ├── AppUpdate.kt                // Модель даних оновлення
-│       │   │   │   ├── SegmentationMode.kt         // Перелік режимів (FAST, STUDIO)
+│       │   │   │   ├── AppUpdate.kt                // Модель оновлення
+│       │   │   │   ├── SegmentationMode.kt         // Перелік режимів (FAST, STUDIO, ULTRA)
 │       │   │   │   └── SegmentationResult.kt       // Модель результату
 │       │   │   ├── repository/
 │       │   │   │   ├── SubjectSegmenter.kt         // Інтерфейс сегментації (seam)
-│       │   │   │   └── UpdateManager.kt            // Інтерфейс оновлення застосунку
+│       │   │   │   └── UpdateManager.kt            // Інтерфейс оновлення
 │       │   │   └── usecase/
-│       │   │       └── SegmentImageUseCase.kt      // Сценарій сегментації
+│       │   │       └── SegmentImageUseCase.kt      // Бізнес-сценарій
 │       │   └── ui/
 │       │       ├── MainActivity.kt                 // Вхідна точка Activity
 │       │       ├── components/
-│       │       │   ├── BackgroundSelector.kt       // Вибір фонів та кольорових пресетів
+│       │       │   ├── BackgroundSelector.kt       // Вибір фону та палітри
 │       │       │   ├── CheckerboardBackground.kt   // Шахова сітка прозорості
-│       │       │   ├── ImagePreviewArea.kt         // Полотно, зум, панорамування, порівняння
-│       │       │   ├── QualityModeSelector.kt      // Перемикач Швидкий / Студійний
-│       │       │   └── UpdateDialog.kt             // Діалог перевірки та завантаження оновлень
+│       │       │   ├── ImagePreviewArea.kt         // Зум, порівняння оригіналу
+│       │       │   ├── QualityModeSelector.kt      // Перемикач 3 режимів + діалог завантаження
+│       │       │   └── UpdateDialog.kt             // Діалог оновлення версій
 │       │       ├── screen/
 │       │       │   └── MainScreen.kt               // Головний екран
 │       │       ├── theme/
@@ -67,7 +74,7 @@ BgRemoverAndroid/
 │       │       │   ├── Theme.kt
 │       │       │   └── Type.kt
 │       │       └── viewmodel/
-│       │           └── MainViewModel.kt            // StateFlow та реактивна бізнес-логіка
+│       │           └── MainViewModel.kt            // Керування реактивним станом
 │       └── res/
 │           ├── values/
 │           │   ├── strings.xml
@@ -84,7 +91,7 @@ BgRemoverAndroid/
 
 ---
 
-## Вбудована система автооновлень
-- Застосунок самостійно перевіряє вихід нових версій через публічний GitHub Releases API.
-- При виявленні нової версії з'являється діалогове вікно зі списком змін та кнопкою встановлення.
-- Завантаження виконується напряму з GitHub Actions, після чого відкривається стандартний інсталятор Android пакетів.
+## Вбудована система версій та автооновлень
+- Застосунок періодично опитує публічний GitHub Releases API.
+- Якщо опубліковано новішу версію APK, на екрані з'являється діалог оновлення з переліком змін.
+- Завантаження та виклик системного інсталятора Android виконуються в один дотик.

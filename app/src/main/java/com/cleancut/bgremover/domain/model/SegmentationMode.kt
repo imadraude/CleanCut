@@ -12,7 +12,13 @@ enum class SegmentationMode {
 
     /**
      * Studio-grade matting using RMBG-1.4 via ONNX Runtime Mobile.
-     * High precision for hair, fur, and intricate boundaries.
+     * High precision for hair, fur, and intricate boundaries (42 MB).
      */
-    STUDIO
+    STUDIO,
+
+    /**
+     * Ultra-precision matting using BiRefNet-Lite via ONNX Runtime Mobile.
+     * Flagship accuracy for extreme details, transparent glass, and fine structures (213 MB).
+     */
+    ULTRA
 }

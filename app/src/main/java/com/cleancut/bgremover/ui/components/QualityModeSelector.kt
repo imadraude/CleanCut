@@ -3,6 +3,7 @@ package com.cleancut.bgremover.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,8 +13,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoFixHigh
-import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Hd
+import androidx.compose.material.icons.outlined.PhotoFilter
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -48,6 +50,7 @@ fun QualityModeSelector(
                 .fillMaxWidth()
                 .padding(4.dp)
         ) {
+            // 1. FAST MODE
             val isFast = currentMode == SegmentationMode.FAST
             Box(
                 modifier = Modifier
@@ -60,14 +63,14 @@ fun QualityModeSelector(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Outlined.Bolt,
+                        imageVector = Icons.Outlined.Speed,
                         contentDescription = null,
                         tint = if (isFast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Швидкий (Edge Filter)",
+                        text = "Швидкий",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (isFast) FontWeight.SemiBold else FontWeight.Normal,
                         color = if (isFast) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
@@ -75,6 +78,7 @@ fun QualityModeSelector(
                 }
             }
 
+            // 2. STUDIO MODE (RMBG-1.4)
             val isStudio = currentMode == SegmentationMode.STUDIO
             Box(
                 modifier = Modifier
@@ -87,17 +91,45 @@ fun QualityModeSelector(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Outlined.AutoFixHigh,
+                        imageVector = Icons.Outlined.PhotoFilter,
                         contentDescription = null,
                         tint = if (isStudio) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Студійний (RMBG)",
+                        text = "Студія",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (isStudio) FontWeight.SemiBold else FontWeight.Normal,
                         color = if (isStudio) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 3. ULTRA MODE (BiRefNet)
+            val isUltra = currentMode == SegmentationMode.ULTRA
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isUltra) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable { onModeSelected(SegmentationMode.ULTRA) },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Hd,
+                        contentDescription = null,
+                        tint = if (isUltra) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "BiRefNet",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isUltra) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isUltra) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -106,24 +138,33 @@ fun QualityModeSelector(
 }
 
 @Composable
-fun DownloadStudioModelDialog(
+fun DownloadModelDialog(
+    targetMode: SegmentationMode,
     isDownloading: Boolean,
     progress: Int,
     onConfirmDownload: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val modelTitle = if (targetMode == SegmentationMode.ULTRA) "Ультра BiRefNet-Lite" else "Студійний RMBG-1.4"
+    val modelSize = if (targetMode == SegmentationMode.ULTRA) "~213 МБ" else "~42 МБ"
+    val modelDesc = if (targetMode == SegmentationMode.ULTRA) {
+        "BiRefNet забезпечує еталонну точність для найдрібніших деталей, скла та тонких структур."
+    } else {
+        "RMBG-1.4 забезпечує студійне виділення волосся та складних меж об'єкта."
+    }
+
     AlertDialog(
         onDismissRequest = { if (!isDownloading) onDismiss() },
         title = {
             Text(
-                text = "Студійний режим RMBG-1.4",
+                text = "Завантаження моделі: $modelTitle",
                 style = MaterialTheme.typography.titleLarge
             )
         },
         text = {
-            androidx.compose.foundation.layout.Column {
+            Column {
                 Text(
-                    text = "Для максимальної чіткості волосся та дрібних деталей потрібна модель RMBG-1.4 (розмір ~42 МБ).",
+                    text = "$modelDesc Розмір файлу: $modelSize.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -131,7 +172,7 @@ fun DownloadStudioModelDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Модель завантажується один раз, зберігається на пристрої та працює автономно.",
+                    text = "Модель зберігається в пам'яті пристрою та працює повністю автономно без доступу до мережі.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -139,7 +180,7 @@ fun DownloadStudioModelDialog(
                 if (isDownloading) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Завантаження моделі: $progress%",
+                        text = "Завантаження: $progress%",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -161,7 +202,7 @@ fun DownloadStudioModelDialog(
                 modifier = Modifier.height(48.dp)
             ) {
                 Text(
-                    text = if (isDownloading) "Завантаження..." else "Завантажити модель",
+                    text = if (isDownloading) "Завантаження..." else "Завантажити ($modelSize)",
                     style = MaterialTheme.typography.titleMedium
                 )
             }

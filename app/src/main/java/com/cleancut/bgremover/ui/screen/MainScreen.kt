@@ -84,7 +84,7 @@ fun MainScreen(
 
     val updateState by viewModel.updateState.collectAsState()
     val segmentationMode by viewModel.segmentationMode.collectAsState()
-    val studioDownloadState by viewModel.studioDownloadState.collectAsState()
+    val modelDownloadState by viewModel.modelDownloadState.collectAsState()
 
     // Show snackbar when there is a user message from segmentation
     val userMessage = (uiState as? MainUiState.Success)?.userMessage
@@ -114,13 +114,14 @@ fun MainScreen(
         )
     }
 
-    // Studio Model Download Dialog (RMBG-1.4)
-    if (studioDownloadState.showDialog) {
-        com.cleancut.bgremover.ui.components.DownloadStudioModelDialog(
-            isDownloading = studioDownloadState.isDownloading,
-            progress = studioDownloadState.downloadProgress,
-            onConfirmDownload = { viewModel.downloadStudioModel() },
-            onDismiss = { viewModel.dismissStudioDownloadDialog() }
+    // Model Download Dialog (RMBG-1.4 or BiRefNet)
+    if (modelDownloadState.showDialog) {
+        com.cleancut.bgremover.ui.components.DownloadModelDialog(
+            targetMode = modelDownloadState.targetMode,
+            isDownloading = modelDownloadState.isDownloading,
+            progress = modelDownloadState.downloadProgress,
+            onConfirmDownload = { viewModel.downloadRequiredModel() },
+            onDismiss = { viewModel.dismissModelDownloadDialog() }
         )
     }
 

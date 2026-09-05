@@ -47,8 +47,9 @@ data class UpdateUiState(
     val infoMessage: String? = null
 )
 
-data class StudioModelDownloadState(
+data class ModelDownloadState(
     val showDialog: Boolean = false,
+    val targetMode: SegmentationMode = SegmentationMode.STUDIO,
     val isDownloading: Boolean = false,
     val downloadProgress: Int = 0
 )
@@ -68,8 +69,8 @@ class MainViewModel(
     private val _segmentationMode = MutableStateFlow(SegmentationMode.FAST)
     val segmentationMode: StateFlow<SegmentationMode> = _segmentationMode.asStateFlow()
 
-    private val _studioDownloadState = MutableStateFlow(StudioModelDownloadState())
-    val studioDownloadState: StateFlow<StudioModelDownloadState> = _studioDownloadState.asStateFlow()
+    private val _modelDownloadState = MutableStateFlow(ModelDownloadState())
+    val modelDownloadState: StateFlow<ModelDownloadState> = _modelDownloadState.asStateFlow()
 
     private var currentInputBitmap: Bitmap? = null
 
@@ -79,8 +80,10 @@ class MainViewModel(
     }
 
     fun setSegmentationMode(mode: SegmentationMode) {
-        if (mode == SegmentationMode.STUDIO && !segmentUseCase.isStudioModelReady()) {
-            _studioDownloadState.update { it.copy(showDialog = true) }
+        if (!segmentUseCase.isModelReady(mode)) {
+            _modelDownloadState.update {
+                it.copy(showDialog = true, targetMode = mode)
+            }
             return
         }
 
@@ -92,22 +95,23 @@ class MainViewModel(
         }
     }
 
-    fun downloadStudioModel() {
-        _studioDownloadState.update { it.copy(isDownloading = true, downloadProgress = 0) }
+    fun downloadRequiredModel() {
+        val target = _modelDownloadState.value.targetMode
+        _modelDownloadState.update { it.copy(isDownloading = true, downloadProgress = 0) }
 
         viewModelScope.launch {
-            val result = segmentUseCase.downloadStudioModel { progress ->
-                _studioDownloadState.update { it.copy(downloadProgress = progress) }
+            val result = segmentUseCase.downloadModel(target) { progress ->
+                _modelDownloadState.update { it.copy(downloadProgress = progress) }
             }
 
             result.onSuccess {
-                _studioDownloadState.update { it.copy(showDialog = false, isDownloading = false) }
-                _segmentationMode.value = SegmentationMode.STUDIO
+                _modelDownloadState.update { it.copy(showDialog = false, isDownloading = false) }
+                _segmentationMode.value = target
                 currentInputBitmap?.let { bitmap ->
-                    processBitmap(bitmap, SegmentationMode.STUDIO)
+                    processBitmap(bitmap, target)
                 }
             }.onFailure { error ->
-                _studioDownloadState.update { it.copy(isDownloading = false) }
+                _modelDownloadState.update { it.copy(isDownloading = false) }
                 _updateState.update {
                     it.copy(infoMessage = "Помилка завантаження моделі: ${error.localizedMessage}")
                 }
@@ -115,8 +119,8 @@ class MainViewModel(
         }
     }
 
-    fun dismissStudioDownloadDialog() {
-        _studioDownloadState.update { it.copy(showDialog = false) }
+    fun dismissModelDownloadDialog() {
+        _modelDownloadState.update { it.copy(showDialog = false) }
     }
 
     fun checkForUpdates(silent: Boolean = false) {
@@ -215,10 +219,10 @@ class MainViewModel(
 
     private fun processBitmap(bitmap: Bitmap, mode: SegmentationMode) {
         viewModelScope.launch {
-            val message = if (mode == SegmentationMode.FAST) {
-                "Аналіз об'єктів та оптимізація країв (Guided Filter)..."
-            } else {
-                "Студійна нейромережева сегментація (RMBG-1.4)..."
+            val message = when (mode) {
+                SegmentationMode.FAST -> "Оптимізація країв Guided Filter..."
+                SegmentationMode.STUDIO -> "Студійна нейросегментація RMBG-1.4..."
+                SegmentationMode.ULTRA -> "Ультра-прецизійна сегментація BiRefNet..."
             }
             _uiState.value = MainUiState.Processing(message)
 

@@ -18,9 +18,9 @@ class SegmentImageUseCase(
         segmenter.segment(bitmap, mode)
     }
 
-    fun isStudioModelReady(): Boolean = segmenter.isStudioModelReady()
+    fun isModelReady(mode: SegmentationMode): Boolean = segmenter.isModelReady(mode)
 
-    suspend fun downloadStudioModel(onProgress: (Int) -> Unit): Result<File> = withContext(Dispatchers.IO) {
-        segmenter.downloadStudioModel(onProgress)
+    suspend fun downloadModel(mode: SegmentationMode, onProgress: (Int) -> Unit): Result<File> = withContext(Dispatchers.IO) {
+        segmenter.downloadModel(mode, onProgress)
     }
 }

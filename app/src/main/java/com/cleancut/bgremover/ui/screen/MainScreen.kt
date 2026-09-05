@@ -82,13 +82,34 @@ fun MainScreen(
         uri?.let { viewModel.setCustomBackgroundUri(context, it) }
     }
 
-    // Show snackbar when there is a user message
+    val updateState by viewModel.updateState.collectAsState()
+
+    // Show snackbar when there is a user message from segmentation
     val userMessage = (uiState as? MainUiState.Success)?.userMessage
     LaunchedEffect(userMessage) {
         if (userMessage != null) {
             snackbarHostState.showSnackbar(userMessage)
             viewModel.clearMessage()
         }
+    }
+
+    // Show snackbar when there is an update message
+    LaunchedEffect(updateState.infoMessage) {
+        updateState.infoMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearUpdateMessage()
+        }
+    }
+
+    // In-app Update Dialog
+    updateState.availableUpdate?.let { updateInfo ->
+        com.cleancut.bgremover.ui.components.UpdateDialog(
+            updateInfo = updateInfo,
+            isDownloading = updateState.isDownloading,
+            downloadProgress = updateState.downloadProgress,
+            onConfirmUpdate = { viewModel.startUpdateDownload() },
+            onDismiss = { viewModel.dismissUpdateDialog() }
+        )
     }
 
     Scaffold(
@@ -121,13 +142,32 @@ fun MainScreen(
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.padding(end = 12.dp)
+                            modifier = Modifier.padding(end = 8.dp)
                         ) {
                             Text(
                                 text = "${state.processingTimeMs} мс",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    // Check for updates button
+                    IconButton(
+                        onClick = { viewModel.checkForUpdates(silent = false) },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        if (updateState.isChecking) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = "Перевірити оновлення"
                             )
                         }
                     }

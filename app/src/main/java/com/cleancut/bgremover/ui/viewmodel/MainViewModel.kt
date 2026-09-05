@@ -1,14 +1,19 @@
 package com.cleancut.bgremover.ui.viewmodel
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.cleancut.bgremover.BuildConfig
 import com.cleancut.bgremover.data.ml.MlKitSubjectSegmenter
+import com.cleancut.bgremover.data.update.GitHubUpdateManager
 import com.cleancut.bgremover.data.util.BackgroundOption
 import com.cleancut.bgremover.data.util.BitmapUtils
+import com.cleancut.bgremover.domain.model.AppUpdate
+import com.cleancut.bgremover.domain.repository.UpdateManager
 import com.cleancut.bgremover.domain.usecase.SegmentImageUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,12 +38,102 @@ sealed interface MainUiState {
     data class Error(val errorMessage: String) : MainUiState
 }
 
+data class UpdateUiState(
+    val isChecking: Boolean = false,
+    val availableUpdate: AppUpdate? = null,
+    val isDownloading: Boolean = false,
+    val downloadProgress: Int = 0,
+    val infoMessage: String? = null
+)
+
 class MainViewModel(
-    private val segmentUseCase: SegmentImageUseCase = SegmentImageUseCase(MlKitSubjectSegmenter())
-) : ViewModel() {
+    application: Application,
+    private val segmentUseCase: SegmentImageUseCase = SegmentImageUseCase(MlKitSubjectSegmenter()),
+    private val updateManager: UpdateManager = GitHubUpdateManager(application)
+) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Idle)
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
+
+    private val _updateState = MutableStateFlow(UpdateUiState())
+    val updateState: StateFlow<UpdateUiState> = _updateState.asStateFlow()
+
+    init {
+        // Automatically check for newer releases in background on startup
+        checkForUpdates(silent = true)
+    }
+
+    fun checkForUpdates(silent: Boolean = false) {
+        viewModelScope.launch {
+            if (!silent) {
+                _updateState.update { it.copy(isChecking = true) }
+            }
+
+            val currentVersion = BuildConfig.VERSION_NAME
+            val result = updateManager.checkForUpdate(currentVersion)
+
+            result.onSuccess { update ->
+                if (update.isUpdateAvailable) {
+                    _updateState.update {
+                        it.copy(
+                            isChecking = false,
+                            availableUpdate = update
+                        )
+                    }
+                } else {
+                    _updateState.update {
+                        it.copy(
+                            isChecking = false,
+                            infoMessage = if (!silent) "У вас встановлена найновіша версія (v$currentVersion)" else null
+                        )
+                    }
+                }
+            }.onFailure { error ->
+                _updateState.update {
+                    it.copy(
+                        isChecking = false,
+                        infoMessage = if (!silent) "Помилка перевірки оновлень: ${error.localizedMessage}" else null
+                    )
+                }
+            }
+        }
+    }
+
+    fun startUpdateDownload() {
+        val update = _updateState.value.availableUpdate ?: return
+        _updateState.update { it.copy(isDownloading = true, downloadProgress = 0) }
+
+        viewModelScope.launch {
+            val downloadResult = updateManager.downloadApk(update.apkDownloadUrl) { progress ->
+                _updateState.update { it.copy(downloadProgress = progress) }
+            }
+
+            downloadResult.onSuccess { apkFile ->
+                _updateState.update {
+                    it.copy(
+                        isDownloading = false,
+                        availableUpdate = null
+                    )
+                }
+                updateManager.installApk(apkFile)
+            }.onFailure { error ->
+                _updateState.update {
+                    it.copy(
+                        isDownloading = false,
+                        infoMessage = "Помилка завантаження оновлення: ${error.localizedMessage}"
+                    )
+                }
+            }
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _updateState.update { it.copy(availableUpdate = null) }
+    }
+
+    fun clearUpdateMessage() {
+        _updateState.update { it.copy(infoMessage = null) }
+    }
 
     fun processImageUri(context: Context, uri: Uri) {
         viewModelScope.launch {

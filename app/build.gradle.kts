@@ -7,12 +7,16 @@ android {
     namespace = "com.cleancut.bgremover"
     compileSdk = 34
 
+    val gitCommitCount = providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+    }.standardOutput.asText.map { it.trim().toIntOrNull() ?: 1 }.orElse(1)
+
     defaultConfig {
         applicationId = "com.cleancut.bgremover"
         minSdk = 24
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.2.1"
+        versionCode = gitCommitCount.get() + 10
+        versionName = "1.2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -20,8 +24,21 @@ android {
         }
     }
 
+    signingConfigs {
+        create("shared") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
-        release {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("shared")
+        }
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("shared")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

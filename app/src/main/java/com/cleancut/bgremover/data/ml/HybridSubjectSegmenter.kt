@@ -17,9 +17,9 @@ class HybridSubjectSegmenter(
     context: Context
 ) : SubjectSegmenter {
 
-    private val fastSegmenter = MlKitSubjectSegmenter()
-    private val studioSegmenter = OnnxRmbgSegmenter(context)
-    private val ultraSegmenter = OnnxBiRefNetSegmenter(context)
+    private val fastSegmenter by lazy { MlKitSubjectSegmenter() }
+    private val studioSegmenter by lazy { OnnxRmbgSegmenter(context) }
+    private val ultraSegmenter by lazy { OnnxBiRefNetSegmenter(context) }
 
     override suspend fun segment(bitmap: Bitmap, mode: SegmentationMode): Result<SegmentationResult> {
         return when (mode) {

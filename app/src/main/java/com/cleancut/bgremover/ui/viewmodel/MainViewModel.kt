@@ -55,10 +55,11 @@ data class ModelDownloadState(
 )
 
 class MainViewModel(
-    application: Application,
-    private val segmentUseCase: SegmentImageUseCase = SegmentImageUseCase(HybridSubjectSegmenter(application)),
-    private val updateManager: UpdateManager = GitHubUpdateManager(application)
+    application: Application
 ) : AndroidViewModel(application) {
+
+    private val segmentUseCase: SegmentImageUseCase = SegmentImageUseCase(HybridSubjectSegmenter(application))
+    private val updateManager: UpdateManager = GitHubUpdateManager(application)
 
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Idle)
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()

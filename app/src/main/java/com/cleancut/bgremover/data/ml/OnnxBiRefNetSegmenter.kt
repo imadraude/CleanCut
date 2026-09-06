@@ -24,15 +24,16 @@ import kotlin.math.min
 import kotlin.system.measureTimeMillis
 
 /**
- * Ultra-precision on-device matting using BiRefNet-Lite via ONNX Runtime Mobile.
- * Uses Bilateral Reference Network architecture with Swin Transformer backbone.
- * Optimized with direct native buffers, ImageNet normalization LUTs, and fused bilinear compositing.
+ * Ultra-precision on-device matting using BiRefNet-General-Lite via ONNX Runtime Mobile.
+ * Uses Bilateral Reference Network architecture with Swin Transformer backbone trained on general matting datasets.
+ * Features direct 1024x1024 tensor feeding, ImageNet normalization LUTs, unconditional numerically-stable sigmoid,
+ * and high-fidelity bilinear alpha resampling.
  */
 class OnnxBiRefNetSegmenter(
     private val context: Context
 ) {
-    private val modelUrl = "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/main/onnx/model.onnx"
-    private val modelFile = File(File(context.filesDir, "models").apply { mkdirs() }, "birefnet_lite.onnx")
+    private val modelUrl = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/birefnet-general-lite.onnx"
+    private val modelFile = File(File(context.filesDir, "models").apply { mkdirs() }, "birefnet_general_lite.onnx")
 
     private var ortEnv: OrtEnvironment? = null
     private var ortSession: OrtSession? = null
@@ -85,7 +86,7 @@ class OnnxBiRefNetSegmenter(
 
             val fileLength = connection.contentLength
             val inputStream = BufferedInputStream(connection.inputStream, 64 * 1024)
-            val tempFile = File(modelFile.parentFile, "birefnet_temp.onnx")
+            val tempFile = File(modelFile.parentFile, "birefnet_general_temp.onnx")
             val outputStream = BufferedOutputStream(FileOutputStream(tempFile), 64 * 1024)
 
             val buffer = ByteArray(64 * 1024)
@@ -106,14 +107,23 @@ class OnnxBiRefNetSegmenter(
             inputStream.close()
 
             if (tempFile.renameTo(modelFile)) {
+                cleanupLegacyModel()
                 Result.success(modelFile)
             } else {
                 tempFile.copyTo(modelFile, overwrite = true)
                 tempFile.delete()
+                cleanupLegacyModel()
                 Result.success(modelFile)
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private fun cleanupLegacyModel() {
+        val legacyFile = File(modelFile.parentFile, "birefnet_lite.onnx")
+        if (legacyFile.exists()) {
+            legacyFile.delete()
         }
     }
 
@@ -164,40 +174,25 @@ class OnnxBiRefNetSegmenter(
             var execTime = 0L
 
             execTime = measureTimeMillis {
-                // 1. Aspect-ratio preserving letterboxing (prevents geometric distortion)
-                val scale = targetDim.toFloat() / max(origWidth, origHeight)
-                val scaledWidth = (origWidth * scale).toInt().coerceIn(1, targetDim)
-                val scaledHeight = (origHeight * scale).toInt().coerceIn(1, targetDim)
-                val padX = (targetDim - scaledWidth) / 2
-                val padY = (targetDim - scaledHeight) / 2
-
-                val resizedBitmap = Bitmap.createScaledBitmap(originalBitmap, scaledWidth, scaledHeight, true)
-                val scaledPixels = IntArray(scaledWidth * scaledHeight)
-                resizedBitmap.getPixels(scaledPixels, 0, scaledWidth, 0, 0, scaledWidth, scaledHeight)
+                // 1. Direct 1024x1024 resize matching BiRefNet standard training pipeline
+                val resizedBitmap = Bitmap.createScaledBitmap(originalBitmap, targetDim, targetDim, true)
+                val scaledPixels = IntArray(planeSize)
+                resizedBitmap.getPixels(scaledPixels, 0, targetDim, 0, 0, targetDim, targetDim)
 
                 if (resizedBitmap != originalBitmap) {
                     resizedBitmap.recycle()
                 }
 
-                // 2. Prepare NCHW direct FloatBuffer with ImageNet mean/std LUTs and neutral padding
+                // 2. Prepare NCHW direct FloatBuffer with ImageNet mean/std LUTs
                 val rPlane = cachedRPlane ?: FloatArray(planeSize).also { cachedRPlane = it }
                 val gPlane = cachedGPlane ?: FloatArray(planeSize).also { cachedGPlane = it }
                 val bPlane = cachedBPlane ?: FloatArray(planeSize).also { cachedBPlane = it }
 
-                // Neutral padding (0.0f in normalized ImageNet space)
-                rPlane.fill(0f)
-                gPlane.fill(0f)
-                bPlane.fill(0f)
-
-                for (y in 0 until scaledHeight) {
-                    val srcRowOffset = y * scaledWidth
-                    val dstRowOffset = (padY + y) * targetDim + padX
-                    for (x in 0 until scaledWidth) {
-                        val px = scaledPixels[srcRowOffset + x]
-                        rPlane[dstRowOffset + x] = rLut[(px shr 16) and 0xFF]
-                        gPlane[dstRowOffset + x] = gLut[(px shr 8) and 0xFF]
-                        bPlane[dstRowOffset + x] = bLut[px and 0xFF]
-                    }
+                for (i in 0 until planeSize) {
+                    val px = scaledPixels[i]
+                    rPlane[i] = rLut[(px shr 16) and 0xFF]
+                    gPlane[i] = gLut[(px shr 8) and 0xFF]
+                    bPlane[i] = bLut[px and 0xFF]
                 }
 
                 val floatBuffer = getOrCreateDirectBuffer(targetDim)
@@ -224,45 +219,40 @@ class OnnxBiRefNetSegmenter(
                 val mask1024 = FloatArray(planeSize)
                 outputBuffer.get(mask1024)
 
-                // Check if output is raw logits needing sigmoid activation
-                var needsSigmoid = false
-                val checkLimit = min(100, planeSize)
-                for (i in 0 until checkLimit) {
-                    if (mask1024[i] < -0.01f || mask1024[i] > 1.01f) {
-                        needsSigmoid = true
-                        break
-                    }
-                }
-                if (needsSigmoid) {
-                    for (i in 0 until planeSize) {
-                        mask1024[i] = 1f / (1f + exp(-mask1024[i]))
+                // 5. Unconditional numerically-stable sigmoid activation
+                for (i in 0 until planeSize) {
+                    val v = mask1024[i]
+                    mask1024[i] = when {
+                        v >= 15f -> 1.0f
+                        v <= -15f -> 0.0f
+                        else -> 1f / (1f + exp(-v))
                     }
                 }
 
-                // 5. Unpad and resample mask from active letterbox region to native dimensions
+                // 6. Direct bilinear interpolation from 1024x1024 mask to native dimensions
                 val rawMask = FloatArray(origWidth * origHeight)
-                val xRatio = (scaledWidth - 1).toFloat() / max(1, origWidth - 1)
-                val yRatio = (scaledHeight - 1).toFloat() / max(1, origHeight - 1)
+                val xRatio = (targetDim - 1).toFloat() / max(1, origWidth - 1)
+                val yRatio = (targetDim - 1).toFloat() / max(1, origHeight - 1)
 
                 val xTable = IntArray(origWidth)
                 val nextXTable = IntArray(origWidth)
                 val xDiffTable = FloatArray(origWidth)
                 for (x in 0 until origWidth) {
-                    val sx = (x * xRatio).toInt().coerceIn(0, scaledWidth - 1)
-                    xTable[x] = padX + sx
-                    nextXTable[x] = padX + min(scaledWidth - 1, sx + 1)
+                    val sx = (x * xRatio).toInt().coerceIn(0, targetDim - 1)
+                    xTable[x] = sx
+                    nextXTable[x] = min(targetDim - 1, sx + 1)
                     xDiffTable[x] = ((x * xRatio) - sx).coerceIn(0f, 1f)
                 }
 
                 for (y in 0 until origHeight) {
-                    val sy = (y * yRatio).toInt().coerceIn(0, scaledHeight - 1)
-                    val nextSy = min(scaledHeight - 1, sy + 1)
+                    val sy = (y * yRatio).toInt().coerceIn(0, targetDim - 1)
+                    val nextSy = min(targetDim - 1, sy + 1)
                     val yDiff = ((y * yRatio) - sy).coerceIn(0f, 1f)
                     val invYDiff = 1f - yDiff
 
                     val rowOffsetDst = y * origWidth
-                    val rowOffsetSrc = (padY + sy) * targetDim
-                    val nextRowOffsetSrc = (padY + nextSy) * targetDim
+                    val rowOffsetSrc = sy * targetDim
+                    val nextRowOffsetSrc = nextSy * targetDim
 
                     for (x in 0 until origWidth) {
                         val sx = xTable[x]
@@ -281,27 +271,19 @@ class OnnxBiRefNetSegmenter(
                     }
                 }
 
-                // 6. Edge refinement via Fast Guided Filter with full-res guidance image
-                val refinedMask = GuidedFilter.filter(
-                    original = originalBitmap,
-                    inputMask = rawMask,
-                    radius = 4,
-                    eps = 1e-3f
-                )
-
-                // 7. Defringing and cutout compositing
+                // 7. Natural alpha compositing preserving fine details and hair strands
                 val pixels = IntArray(origWidth * origHeight)
                 originalBitmap.getPixels(pixels, 0, origWidth, 0, 0, origWidth, origHeight)
 
                 for (i in pixels.indices) {
-                    var alpha = refinedMask[i]
-                    alpha = when {
-                        alpha < 0.05f -> 0f
-                        alpha > 0.95f -> 1f
-                        else -> smoothstep(0.05f, 0.95f, alpha)
+                    val alpha = rawMask[i]
+                    val finalAlpha = when {
+                        alpha < 0.01f -> 0f
+                        alpha > 0.99f -> 1f
+                        else -> alpha
                     }
 
-                    val alphaInt = (alpha * 255f).toInt().coerceIn(0, 255)
+                    val alphaInt = (finalAlpha * 255f + 0.5f).toInt().coerceIn(0, 255)
                     if (alphaInt == 0) {
                         pixels[i] = 0
                     } else {
@@ -338,10 +320,5 @@ class OnnxBiRefNetSegmenter(
         cachedRPlane = null
         cachedGPlane = null
         cachedBPlane = null
-    }
-
-    private fun smoothstep(edge0: Float, edge1: Float, x: Float): Float {
-        val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
-        return t * t * (3f - 2f * t)
     }
 }

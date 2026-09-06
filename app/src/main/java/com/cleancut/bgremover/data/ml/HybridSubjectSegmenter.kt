@@ -11,7 +11,7 @@ import java.io.File
  * Tri-tier hybrid implementation:
  * - FAST mode: Google ML Kit with Guided Filter edge refinement (0 MB, 50ms).
  * - STUDIO mode: Bria AI RMBG-1.4 via ONNX Runtime Mobile (~42 MB).
- * - ULTRA mode: BiRefNet-Lite via ONNX Runtime Mobile for flagship precision (~213 MB).
+ * - ULTRA mode: BiRefNet-Lite via ONNX Runtime Mobile for flagship precision (~224 MB).
  */
 class HybridSubjectSegmenter(
     context: Context

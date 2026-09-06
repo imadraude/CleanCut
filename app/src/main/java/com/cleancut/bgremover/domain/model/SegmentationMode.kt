@@ -18,7 +18,7 @@ enum class SegmentationMode {
 
     /**
      * Ultra-precision matting using BiRefNet-Lite via ONNX Runtime Mobile.
-     * Flagship accuracy for extreme details, transparent glass, and fine structures (213 MB).
+     * Flagship accuracy for extreme details, transparent glass, and fine structures (224 MB).
      */
     ULTRA
 }

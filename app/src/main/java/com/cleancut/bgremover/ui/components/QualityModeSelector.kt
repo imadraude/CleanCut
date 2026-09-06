@@ -172,7 +172,7 @@ fun DownloadModelDialog(
     onDismiss: () -> Unit
 ) {
     val modelTitle = if (targetMode == SegmentationMode.ULTRA) "Ультра BiRefNet-Lite" else "Студійний RMBG-1.4"
-    val modelSize = if (targetMode == SegmentationMode.ULTRA) "~213 МБ" else "~42 МБ"
+    val modelSize = if (targetMode == SegmentationMode.ULTRA) "~224 МБ" else "~42 МБ"
     val modelDesc = if (targetMode == SegmentationMode.ULTRA) {
         "BiRefNet забезпечує еталонну точність для найдрібніших деталей, скла та тонких структур."
     } else {

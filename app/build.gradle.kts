@@ -16,12 +16,19 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = gitCommitCount.get() + 10
-        versionName = "1.5.4"
+        versionName = "1.5.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+    }
+
+    val keystorePropertiesFile = file("keystore.properties").takeIf { it.exists() }
+        ?: rootProject.file("keystore.properties").takeIf { it.exists() }
+    val keystoreProperties = java.util.Properties()
+    if (keystorePropertiesFile != null) {
+        keystoreProperties.load(keystorePropertiesFile.inputStream())
     }
 
     signingConfigs {
@@ -31,6 +38,27 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            val envStore = System.getenv("KEYSTORE_PATH")
+            val propStore = keystoreProperties.getProperty("storeFile")
+            val releaseKeystoreFile = when {
+                envStore != null && file(envStore).exists() -> file(envStore)
+                propStore != null && file(propStore).exists() -> file(propStore)
+                file("release.keystore").exists() -> file("release.keystore")
+                else -> file("debug.keystore")
+            }
+
+            storeFile = releaseKeystoreFile
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+                ?: keystoreProperties.getProperty("storePassword")
+                ?: "android"
+            keyAlias = System.getenv("KEY_ALIAS")
+                ?: keystoreProperties.getProperty("keyAlias")
+                ?: "androiddebugkey"
+            keyPassword = System.getenv("KEY_PASSWORD")
+                ?: keystoreProperties.getProperty("keyPassword")
+                ?: storePassword
+        }
     }
 
     buildTypes {
@@ -38,7 +66,7 @@ android {
             signingConfig = signingConfigs.getByName("shared")
         }
         getByName("release") {
-            signingConfig = signingConfigs.getByName("shared")
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

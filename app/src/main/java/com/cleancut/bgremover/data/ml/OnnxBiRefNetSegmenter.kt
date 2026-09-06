@@ -216,14 +216,26 @@ class OnnxBiRefNetSegmenter(
                 val mask1024 = FloatArray(planeSize)
                 outputBuffer.get(mask1024)
 
-                // 5. Unconditional numerically-stable sigmoid activation
+                // 5. Unconditional numerically-stable sigmoid activation + DIS/BiRefNet min-max dynamic scaling
+                // Standard in official BiRefNet and rembg: pred = (sigmoid(pred) - mi) / (ma - mi)
+                var minVal = Float.MAX_VALUE
+                var maxVal = -Float.MAX_VALUE
                 for (i in 0 until planeSize) {
                     val v = mask1024[i]
-                    mask1024[i] = when {
+                    val sig = when {
                         v >= 15f -> 1.0f
                         v <= -15f -> 0.0f
                         else -> 1f / (1f + exp(-v))
                     }
+                    mask1024[i] = sig
+                    if (sig < minVal) minVal = sig
+                    if (sig > maxVal) maxVal = sig
+                }
+
+                val range = maxVal - minVal
+                val invRange = if (range > 1e-6f) 1f / range else 1f
+                for (i in 0 until planeSize) {
+                    mask1024[i] = ((mask1024[i] - minVal) * invRange).coerceIn(0f, 1f)
                 }
 
                 // 6. Direct bilinear interpolation from 1024x1024 mask to native dimensions

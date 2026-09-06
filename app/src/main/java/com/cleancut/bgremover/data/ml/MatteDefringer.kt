@@ -56,7 +56,7 @@ object MatteDefringer {
 
         val origPixels = pixels.clone()
 
-        // 1. Fast background color sampling from definite background pixels (mask < 0.02)
+        // 1. Fast background color sampling from definite background pixels (mask < 0.03)
         var bgRSum = 0L
         var bgGSum = 0L
         var bgBSum = 0L
@@ -65,7 +65,7 @@ object MatteDefringer {
         val step = max(1, totalPixels / 1000)
         var sIdx = 0
         while (sIdx < totalPixels) {
-            if (mask[sIdx] < 0.02f) {
+            if (mask[sIdx] < 0.03f) {
                 val px = origPixels[sIdx]
                 bgRSum += (px shr 16) and 0xFF
                 bgGSum += (px shr 8) and 0xFF
@@ -75,7 +75,27 @@ object MatteDefringer {
             sIdx += step
         }
 
-        val hasDefiniteBg = bgSampleCount >= 10
+        // Corner sampling fallback: if background wasn't sampled enough (e.g. edge-case masks),
+        // check image corners which are virtually always background in matting tasks
+        if (bgSampleCount < 10) {
+            val corners = intArrayOf(
+                0,
+                width - 1,
+                (height - 1) * width,
+                height * width - 1
+            )
+            for (cIdx in corners) {
+                if (cIdx in 0 until totalPixels && mask[cIdx] < 0.25f) {
+                    val px = origPixels[cIdx]
+                    bgRSum += (px shr 16) and 0xFF
+                    bgGSum += (px shr 8) and 0xFF
+                    bgBSum += px and 0xFF
+                    bgSampleCount++
+                }
+            }
+        }
+
+        val hasDefiniteBg = bgSampleCount >= 4
         val avgBgR = if (hasDefiniteBg) (bgRSum / bgSampleCount).toFloat() else 255f
         val avgBgG = if (hasDefiniteBg) (bgGSum / bgSampleCount).toFloat() else 255f
         val avgBgB = if (hasDefiniteBg) (bgBSum / bgSampleCount).toFloat() else 255f

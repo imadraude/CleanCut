@@ -112,4 +112,25 @@ class MatteDefringerTest {
         assertEquals("Edge G must match solid hair color", 69, edgeG)
         assertEquals("Edge B must match solid hair color", 19, edgeB)
     }
+
+    @Test
+    fun testCornerSamplingFallbackIdentifiesWhiteBackground() {
+        // 2x2 image where only corners can be sampled
+        val width = 2
+        val height = 2
+        val pixels = IntArray(4)
+        val mask = FloatArray(4)
+
+        // All 4 pixels are white background corners
+        for (i in 0 until 4) {
+            pixels[i] = -0x1
+            mask[i] = 0.05f
+        }
+
+        val result = MatteDefringer.decontaminatePixels(pixels, mask, width, height)
+        // With touchesBg and alpha <= 0.25f, all outer border pixels must be suppressed to 0
+        for (i in 0 until 4) {
+            assertEquals("Background pixel must be zeroed out", 0, result[i])
+        }
+    }
 }

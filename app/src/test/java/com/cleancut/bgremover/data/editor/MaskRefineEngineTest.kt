@@ -136,4 +136,48 @@ class MaskRefineEngineTest {
         assertEquals(100, alpha)
         assertEquals(0x0000FF, rgb)
     }
+
+    @Test
+    fun testHistoryChangedCallbackOnStrokeUndoRedo() {
+        val width = 10
+        val height = 10
+        val originalPixels = IntArray(width * height) { (-0x1000000) or 0xFF0000 }
+        val cutoutPixels = IntArray(width * height) { (-0x1000000) or 0xFF0000 }
+
+        val engine = MaskRefineEngine(width, height, originalPixels, cutoutPixels)
+
+        val historyEvents = mutableListOf<Pair<Boolean, Boolean>>()
+        engine.onHistoryChanged = { canUndo, canRedo ->
+            historyEvents.add(Pair(canUndo, canRedo))
+        }
+
+        // Initial assignment fires immediately
+        assertEquals(1, historyEvents.size)
+        assertEquals(Pair(false, false), historyEvents.last())
+
+        // 1. Draw a stroke that modifies pixels
+        engine.startStroke()
+        engine.continueStroke(5, 5, radius = 1, mode = BrushMode.ERASE)
+        engine.endStroke()
+
+        assertEquals(2, historyEvents.size)
+        assertEquals(Pair(true, false), historyEvents.last())
+
+        // 2. Undo
+        assertTrue(engine.undo())
+        assertEquals(3, historyEvents.size)
+        assertEquals(Pair(false, true), historyEvents.last())
+
+        // 3. Redo
+        assertTrue(engine.redo())
+        assertEquals(4, historyEvents.size)
+        assertEquals(Pair(true, false), historyEvents.last())
+
+        // 4. Stroke with no changes should NOT fire history event
+        engine.startStroke()
+        engine.continueStroke(5, 5, radius = 1, mode = BrushMode.ERASE) // (5, 5) is already erased
+        engine.endStroke()
+
+        assertEquals(4, historyEvents.size) // Unchanged
+    }
 }

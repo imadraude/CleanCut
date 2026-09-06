@@ -110,7 +110,17 @@ fun MaskEditorScreen(
         }
     }
 
-    val engine = remember { MaskRefineEngine(imgWidth, imgHeight, origPixels, cutoutPixels) }
+    var canUndo by remember { mutableStateOf(false) }
+    var canRedo by remember { mutableStateOf(false) }
+
+    val engine = remember {
+        MaskRefineEngine(imgWidth, imgHeight, origPixels, cutoutPixels).apply {
+            onHistoryChanged = { u, r ->
+                canUndo = u
+                canRedo = r
+            }
+        }
+    }
 
     // Display bitmap updated in-place for 60/120 FPS live feedback without GC thrashing
     val displayBitmap = remember { engine.createCutoutBitmap() }
@@ -137,7 +147,7 @@ fun MaskEditorScreen(
     val density = LocalDensity.current
 
     BackHandler {
-        if (engine.canUndo) {
+        if (canUndo) {
             showCancelConfirmDialog = true
         } else {
             onCancel()
@@ -182,7 +192,7 @@ fun MaskEditorScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = {
-                            if (engine.canUndo) {
+                            if (canUndo) {
                                 showCancelConfirmDialog = true
                             } else {
                                 onCancel()
@@ -214,7 +224,7 @@ fun MaskEditorScreen(
                                 renderTick++
                             }
                         },
-                        enabled = engine.canUndo
+                        enabled = canUndo
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Undo,
@@ -229,7 +239,7 @@ fun MaskEditorScreen(
                                 renderTick++
                             }
                         },
-                        enabled = engine.canRedo
+                        enabled = canRedo
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Redo,

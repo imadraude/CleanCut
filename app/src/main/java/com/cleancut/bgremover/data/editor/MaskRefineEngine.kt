@@ -67,6 +67,12 @@ class MaskRefineEngine(
     val canUndo: Boolean get() = undoStack.isNotEmpty()
     val canRedo: Boolean get() = redoStack.isNotEmpty()
 
+    var onHistoryChanged: ((canUndo: Boolean, canRedo: Boolean) -> Unit)? = null
+        set(value) {
+            field = value
+            value?.invoke(canUndo, canRedo)
+        }
+
     // Active stroke tracking
     private var isStrokeActive = false
     private var strokeMinX = Int.MAX_VALUE
@@ -253,6 +259,7 @@ class MaskRefineEngine(
                 undoStack.removeAt(0)
             }
             redoStack.clear()
+            onHistoryChanged?.invoke(canUndo, canRedo)
         }
     }
 
@@ -300,6 +307,7 @@ class MaskRefineEngine(
             it.setPixels(workingPixels, patch.top * width + patch.left, width, patch.left, patch.top, patch.width, patch.height)
         }
 
+        onHistoryChanged?.invoke(canUndo, canRedo)
         return true
     }
 
@@ -332,6 +340,7 @@ class MaskRefineEngine(
             it.setPixels(workingPixels, patch.top * width + patch.left, width, patch.left, patch.top, patch.width, patch.height)
         }
 
+        onHistoryChanged?.invoke(canUndo, canRedo)
         return true
     }
 

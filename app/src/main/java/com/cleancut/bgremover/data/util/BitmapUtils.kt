@@ -22,11 +22,9 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import kotlin.math.max
 
-sealed class BackgroundOption {
-    object Transparent : BackgroundOption()
-    data class SolidColor(val colorArgb: Int) : BackgroundOption()
-    data class Image(val backgroundBitmap: Bitmap) : BackgroundOption()
-}
+import com.cleancut.bgremover.domain.model.BackgroundOption
+
+typealias BackgroundOption = com.cleancut.bgremover.domain.model.BackgroundOption
 
 object BitmapUtils {
 

@@ -4,9 +4,15 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import com.cleancut.bgremover.domain.model.BackgroundOption
+import com.cleancut.bgremover.domain.model.SegmentationMode
+import com.cleancut.bgremover.ui.viewmodel.UpdateUiState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,7 +77,6 @@ import com.cleancut.bgremover.ui.components.ImagePreviewArea
 import com.cleancut.bgremover.ui.viewmodel.MainUiState
 import com.cleancut.bgremover.ui.viewmodel.MainViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     viewModel: MainViewModel,
@@ -79,25 +84,25 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val updateState by viewModel.updateState.collectAsState()
+    val segmentationMode by viewModel.segmentationMode.collectAsState()
+    val modelDownloadState by viewModel.modelDownloadState.collectAsState()
+    val isEditingMask by viewModel.isEditingMask.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // System Photo Picker launcher for primary subject
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
-        uri?.let { viewModel.processImageUri(context, it) }
+        uri?.let { viewModel.processImageUri(it) }
     }
 
     // System Photo Picker launcher for custom background replacement
     val bgPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
-        uri?.let { viewModel.setCustomBackgroundUri(context, it) }
+        uri?.let { viewModel.setCustomBackgroundUri(it) }
     }
-
-    val updateState by viewModel.updateState.collectAsState()
-    val segmentationMode by viewModel.segmentationMode.collectAsState()
-    val modelDownloadState by viewModel.modelDownloadState.collectAsState()
 
     // Show snackbar when there is a user message from segmentation
     val userMessage = (uiState as? MainUiState.Success)?.userMessage
@@ -127,7 +132,7 @@ fun MainScreen(
         )
     }
 
-    // Model Download Dialog (RMBG-1.4 or BiRefNet)
+    // Model Download Dialog (RMBG-1.4, BiRefNet, IS-Net)
     if (modelDownloadState.showDialog) {
         com.cleancut.bgremover.ui.components.DownloadModelDialog(
             targetMode = modelDownloadState.targetMode,
@@ -137,8 +142,6 @@ fun MainScreen(
             onDismiss = { viewModel.dismissModelDownloadDialog() }
         )
     }
-
-    val isEditingMask by viewModel.isEditingMask.collectAsState()
 
     if (isEditingMask && uiState is MainUiState.Success) {
         val successState = uiState as MainUiState.Success
@@ -152,9 +155,60 @@ fun MainScreen(
                 viewModel.closeMaskEditor()
             }
         )
-        return
+    } else {
+        MainContent(
+            uiState = uiState,
+            updateState = updateState,
+            segmentationMode = segmentationMode,
+            snackbarHostState = snackbarHostState,
+            onPickPhoto = {
+                photoPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onPickCustomBg = {
+                bgPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onModeSelected = { viewModel.setSegmentationMode(it) },
+            onSelectBackground = { viewModel.selectBackground(it) },
+            onSave = { viewModel.saveToGallery() },
+            onShare = {
+                viewModel.shareImage { chooser ->
+                    context.startActivity(chooser)
+                }
+            },
+            onOpenEditor = { viewModel.openMaskEditor() },
+            onReset = { viewModel.reset() },
+            onCheckUpdates = { viewModel.checkForUpdates(silent = false) },
+            modifier = modifier
+        )
     }
+}
 
+/**
+ * Plain, previewable content composable that receives immutable state and event callbacks
+ * separately from app wiring, ViewModel, and platform dependencies.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MainContent(
+    uiState: MainUiState,
+    updateState: UpdateUiState,
+    segmentationMode: SegmentationMode,
+    snackbarHostState: SnackbarHostState,
+    onPickPhoto: () -> Unit,
+    onPickCustomBg: () -> Unit,
+    onModeSelected: (SegmentationMode) -> Unit,
+    onSelectBackground: (BackgroundOption) -> Unit,
+    onSave: () -> Unit,
+    onShare: () -> Unit,
+    onOpenEditor: () -> Unit,
+    onReset: () -> Unit,
+    onCheckUpdates: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -180,7 +234,7 @@ fun MainScreen(
                 navigationIcon = {
                     if (uiState !is MainUiState.Idle) {
                         IconButton(
-                            onClick = { viewModel.reset() },
+                            onClick = onReset,
                             modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
@@ -192,9 +246,9 @@ fun MainScreen(
                 },
                 actions = {
                     if (uiState is MainUiState.Success) {
-                        val state = uiState as MainUiState.Success
+                        val state = uiState
                         IconButton(
-                            onClick = { viewModel.openMaskEditor() },
+                            onClick = onOpenEditor,
                             modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
@@ -233,7 +287,7 @@ fun MainScreen(
 
                     // Check for updates button
                     IconButton(
-                        onClick = { viewModel.checkForUpdates(silent = false) },
+                        onClick = onCheckUpdates,
                         modifier = Modifier.size(48.dp)
                     ) {
                         if (updateState.isChecking) {
@@ -261,49 +315,45 @@ fun MainScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            when (val state = uiState) {
-                is MainUiState.Idle -> {
-                    IdleStateContent(
-                        currentMode = segmentationMode,
-                        onModeSelected = { viewModel.setSegmentationMode(it) },
-                        onPickPhoto = {
-                            photoPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        }
-                    )
-                }
+            AnimatedContent(
+                targetState = uiState,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+                },
+                label = "mainUiStateTransition"
+            ) { state ->
+                when (state) {
+                    is MainUiState.Idle -> {
+                        IdleStateContent(
+                            currentMode = segmentationMode,
+                            onModeSelected = onModeSelected,
+                            onPickPhoto = onPickPhoto
+                        )
+                    }
 
-                is MainUiState.Processing -> {
-                    ProcessingStateContent(message = state.message)
-                }
+                    is MainUiState.Processing -> {
+                        ProcessingStateContent(message = state.message)
+                    }
 
-                is MainUiState.Success -> {
-                    SuccessStateContent(
-                        state = state,
-                        currentMode = segmentationMode,
-                        onModeSelected = { viewModel.setSegmentationMode(it) },
-                        onSelectBackground = { viewModel.selectBackground(it) },
-                        onPickCustomBg = {
-                            bgPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        },
-                        onSave = { viewModel.saveToGallery(context) },
-                        onShare = { viewModel.shareImage(context) },
-                        onOpenEditor = { viewModel.openMaskEditor() }
-                    )
-                }
+                    is MainUiState.Success -> {
+                        SuccessStateContent(
+                            state = state,
+                            currentMode = segmentationMode,
+                            onModeSelected = onModeSelected,
+                            onSelectBackground = onSelectBackground,
+                            onPickCustomBg = onPickCustomBg,
+                            onSave = onSave,
+                            onShare = onShare,
+                            onOpenEditor = onOpenEditor
+                        )
+                    }
 
-                is MainUiState.Error -> {
-                    ErrorStateContent(
-                        errorMessage = state.errorMessage,
-                        onRetry = {
-                            photoPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        }
-                    )
+                    is MainUiState.Error -> {
+                        ErrorStateContent(
+                            errorMessage = state.errorMessage,
+                            onRetry = onPickPhoto
+                        )
+                    }
                 }
             }
         }
@@ -312,8 +362,8 @@ fun MainScreen(
 
 @Composable
 private fun IdleStateContent(
-    currentMode: com.cleancut.bgremover.domain.model.SegmentationMode,
-    onModeSelected: (com.cleancut.bgremover.domain.model.SegmentationMode) -> Unit,
+    currentMode: SegmentationMode,
+    onModeSelected: (SegmentationMode) -> Unit,
     onPickPhoto: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -487,9 +537,9 @@ private fun ProcessingStateContent(
 @Composable
 private fun SuccessStateContent(
     state: MainUiState.Success,
-    currentMode: com.cleancut.bgremover.domain.model.SegmentationMode,
-    onModeSelected: (com.cleancut.bgremover.domain.model.SegmentationMode) -> Unit,
-    onSelectBackground: (com.cleancut.bgremover.data.util.BackgroundOption) -> Unit,
+    currentMode: SegmentationMode,
+    onModeSelected: (SegmentationMode) -> Unit,
+    onSelectBackground: (BackgroundOption) -> Unit,
     onPickCustomBg: () -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,

@@ -8,15 +8,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 
 /**
  * GPU-accelerated Checkerboard grid pattern to visually represent transparency.
- * Uses a hardware-tiled BitmapShader (1 GPU draw call) instead of thousands of CPU drawRect commands.
+ * Uses a hardware-tiled BitmapShader (1 GPU draw call) with cached paint to eliminate per-frame allocations.
  */
 @Composable
 fun CheckerboardBackground(
@@ -41,14 +41,17 @@ fun CheckerboardBackground(
         BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
     }
 
+    val paint = remember(checkerboardShader) {
+        Paint().apply {
+            asFrameworkPaint().shader = checkerboardShader
+        }
+    }
+
     Canvas(modifier = modifier.fillMaxSize()) {
         drawIntoCanvas { canvas ->
-            val paint = Paint().apply {
-                asFrameworkPaint().shader = checkerboardShader
-            }
-            canvas.drawRect(
-                Rect(0f, 0f, size.width, size.height),
-                paint
+            canvas.nativeCanvas.drawRect(
+                0f, 0f, size.width, size.height,
+                paint.asFrameworkPaint()
             )
         }
     }

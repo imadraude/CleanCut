@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,7 +42,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.cleancut.bgremover.data.util.BackgroundOption
+import com.cleancut.bgremover.domain.model.BackgroundOption
 import kotlin.math.roundToInt
 
 /**
@@ -62,6 +63,9 @@ fun ImagePreviewArea(
 
     val displayImageBitmap = remember(displayBitmap) { displayBitmap.asImageBitmap() }
     val originalImageBitmap = remember(originalBitmap) { originalBitmap.asImageBitmap() }
+
+    val isZoomed by remember { derivedStateOf { scale > 1.05f } }
+    val zoomText by remember { derivedStateOf { "${(scale * 10).roundToInt() / 10f}×" } }
 
     Box(
         modifier = modifier
@@ -140,41 +144,16 @@ fun ImagePreviewArea(
                 .fillMaxSize()
                 .padding(12.dp)
         ) {
-            // Reset zoom pill with magnification indicator
-            if (scale > 1.05f) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
-                    tonalElevation = 4.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    modifier = Modifier.align(Alignment.TopStart)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable {
-                                scale = 1f
-                                offset = Offset.Zero
-                            }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.RestartAlt,
-                            contentDescription = "Скинути масштаб",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${(scale * 10).roundToInt() / 10f}×",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
+            // Reset zoom pill with magnification indicator using derivedState to prevent recompositions
+            ZoomResetPill(
+                isZoomed = isZoomed,
+                zoomText = zoomText,
+                onReset = {
+                    scale = 1f
+                    offset = Offset.Zero
+                },
+                modifier = Modifier.align(Alignment.TopStart)
+            )
 
             // Compare with original toggle pill
             Surface(
@@ -208,6 +187,46 @@ fun ImagePreviewArea(
                         color = if (showOriginal) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZoomResetPill(
+    isZoomed: Boolean,
+    zoomText: String,
+    onReset: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (isZoomed) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+            tonalElevation = 4.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            modifier = modifier
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable(onClick = onReset)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.RestartAlt,
+                    contentDescription = "Скинути масштаб",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = zoomText,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
     }

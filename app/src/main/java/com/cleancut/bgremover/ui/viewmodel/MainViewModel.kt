@@ -10,11 +10,18 @@ import androidx.lifecycle.viewModelScope
 import com.cleancut.bgremover.BuildConfig
 import com.cleancut.bgremover.data.ml.HybridSubjectSegmenter
 import com.cleancut.bgremover.data.update.GitHubUpdateManager
-import com.cleancut.bgremover.data.util.BackgroundOption
 import com.cleancut.bgremover.data.util.BitmapUtils
 import com.cleancut.bgremover.domain.model.AppUpdate
+import com.cleancut.bgremover.domain.model.BackgroundOption
 import com.cleancut.bgremover.domain.model.SegmentationMode
+import com.cleancut.bgremover.domain.model.SegmentationResult
+import com.cleancut.bgremover.domain.repository.SubjectSegmenter
 import com.cleancut.bgremover.domain.repository.UpdateManager
+import com.cleancut.bgremover.domain.usecase.CheckForUpdateUseCase
+import com.cleancut.bgremover.domain.usecase.CheckModelReadyUseCase
+import com.cleancut.bgremover.domain.usecase.DownloadApkUseCase
+import com.cleancut.bgremover.domain.usecase.DownloadModelUseCase
+import com.cleancut.bgremover.domain.usecase.InstallApkUseCase
 import com.cleancut.bgremover.domain.usecase.SegmentImageUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 sealed interface MainUiState {
-    object Idle : MainUiState
+    data object Idle : MainUiState
     data class Processing(val message: String = "Вирізання об'єкта...") : MainUiState
     data class Success(
         val originalBitmap: Bitmap,
@@ -55,11 +62,40 @@ data class ModelDownloadState(
 )
 
 class MainViewModel(
-    application: Application
+    application: Application,
+    private val segmentUseCase: SegmentImageUseCase,
+    private val checkModelReadyUseCase: CheckModelReadyUseCase,
+    private val downloadModelUseCase: DownloadModelUseCase,
+    private val checkForUpdateUseCase: CheckForUpdateUseCase,
+    private val downloadApkUseCase: DownloadApkUseCase,
+    private val installApkUseCase: InstallApkUseCase
 ) : AndroidViewModel(application) {
 
-    private val segmentUseCase: SegmentImageUseCase = SegmentImageUseCase(HybridSubjectSegmenter(application))
-    private val updateManager: UpdateManager = GitHubUpdateManager(application)
+    /**
+     * Primary constructor for standard Android runtime creation with default production implementations.
+     */
+    constructor(
+        application: Application,
+        segmenter: SubjectSegmenter,
+        updateManager: UpdateManager
+    ) : this(
+        application = application,
+        segmentUseCase = SegmentImageUseCase(segmenter),
+        checkModelReadyUseCase = CheckModelReadyUseCase(segmenter),
+        downloadModelUseCase = DownloadModelUseCase(segmenter),
+        checkForUpdateUseCase = CheckForUpdateUseCase(updateManager),
+        downloadApkUseCase = DownloadApkUseCase(updateManager),
+        installApkUseCase = InstallApkUseCase(updateManager)
+    )
+
+    /**
+     * Default constructor required by androidx.activity.viewModels() / default ViewModelProvider.Factory.
+     */
+    constructor(application: Application) : this(
+        application = application,
+        segmenter = HybridSubjectSegmenter(application),
+        updateManager = GitHubUpdateManager(application)
+    )
 
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Idle)
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -77,7 +113,7 @@ class MainViewModel(
     val isEditingMask: StateFlow<Boolean> = _isEditingMask.asStateFlow()
 
     private var currentInputBitmap: Bitmap? = null
-    private val segmentationCache = mutableMapOf<SegmentationMode, com.cleancut.bgremover.domain.model.SegmentationResult>()
+    private val segmentationCache = mutableMapOf<SegmentationMode, SegmentationResult>()
 
     init {
         // Automatically check for newer releases in background on startup
@@ -89,7 +125,7 @@ class MainViewModel(
             return
         }
 
-        if (!segmentUseCase.isModelReady(mode)) {
+        if (!checkModelReadyUseCase(mode)) {
             _modelDownloadState.update {
                 it.copy(showDialog = true, targetMode = mode)
             }
@@ -120,7 +156,7 @@ class MainViewModel(
         _modelDownloadState.update { it.copy(isDownloading = true, downloadProgress = 0) }
 
         viewModelScope.launch {
-            val result = segmentUseCase.downloadModel(target) { progress ->
+            val result = downloadModelUseCase(target) { progress ->
                 _modelDownloadState.update { it.copy(downloadProgress = progress) }
             }
 
@@ -150,7 +186,7 @@ class MainViewModel(
             }
 
             val currentVersion = BuildConfig.VERSION_NAME
-            val result = updateManager.checkForUpdate(currentVersion)
+            val result = checkForUpdateUseCase(currentVersion)
 
             result.onSuccess { update ->
                 if (update.isUpdateAvailable) {
@@ -184,7 +220,7 @@ class MainViewModel(
         _updateState.update { it.copy(isDownloading = true, downloadProgress = 0) }
 
         viewModelScope.launch {
-            val downloadResult = updateManager.downloadApk(update.apkDownloadUrl) { progress ->
+            val downloadResult = downloadApkUseCase(update.apkDownloadUrl) { progress ->
                 _updateState.update { it.copy(downloadProgress = progress) }
             }
 
@@ -195,7 +231,7 @@ class MainViewModel(
                         availableUpdate = null
                     )
                 }
-                updateManager.installApk(apkFile)
+                installApkUseCase(apkFile)
             }.onFailure { error ->
                 _updateState.update {
                     it.copy(
@@ -215,14 +251,14 @@ class MainViewModel(
         _updateState.update { it.copy(infoMessage = null) }
     }
 
-    fun processImageUri(context: Context, uri: Uri) {
+    fun processImageUri(uri: Uri) {
         viewModelScope.launch {
             segmentationCache.clear()
             _uiState.value = MainUiState.Processing("Завантаження та оптимізація фотографії...")
 
             val inputBitmap = withContext(Dispatchers.IO) {
                 try {
-                    BitmapUtils.loadBitmapFromUri(context, uri)
+                    BitmapUtils.loadBitmapFromUri(getApplication(), uri)
                 } catch (e: Exception) {
                     null
                 }
@@ -237,6 +273,9 @@ class MainViewModel(
             processBitmap(inputBitmap, _segmentationMode.value)
         }
     }
+
+    @Deprecated("Use processImageUri(uri) instead", ReplaceWith("processImageUri(uri)"))
+    fun processImageUri(context: Context, uri: Uri) = processImageUri(uri)
 
     private fun processBitmap(bitmap: Bitmap, mode: SegmentationMode) {
         viewModelScope.launch {
@@ -293,13 +332,13 @@ class MainViewModel(
         }
     }
 
-    fun setCustomBackgroundUri(context: Context, bgUri: Uri) {
+    fun setCustomBackgroundUri(bgUri: Uri) {
         val currentState = _uiState.value as? MainUiState.Success ?: return
 
         viewModelScope.launch {
             val bgBitmap = withContext(Dispatchers.IO) {
                 try {
-                    BitmapUtils.loadBitmapFromUri(context, bgUri)
+                    BitmapUtils.loadBitmapFromUri(getApplication(), bgUri)
                 } catch (e: Exception) {
                     null
                 }
@@ -315,7 +354,10 @@ class MainViewModel(
         }
     }
 
-    fun saveToGallery(context: Context) {
+    @Deprecated("Use setCustomBackgroundUri(bgUri) instead", ReplaceWith("setCustomBackgroundUri(bgUri)"))
+    fun setCustomBackgroundUri(context: Context, bgUri: Uri) = setCustomBackgroundUri(bgUri)
+
+    fun saveToGallery() {
         val currentState = _uiState.value as? MainUiState.Success ?: return
         if (currentState.isSaving) return
 
@@ -327,7 +369,7 @@ class MainViewModel(
                     currentState.foregroundCutout,
                     currentState.backgroundOption
                 )
-                val result = BitmapUtils.saveBitmapToGallery(context, composite)
+                val result = BitmapUtils.saveBitmapToGallery(getApplication(), composite)
                 if (composite != currentState.foregroundCutout) {
                     composite.recycle()
                 }
@@ -347,7 +389,10 @@ class MainViewModel(
         }
     }
 
-    fun shareImage(context: Context) {
+    @Deprecated("Use saveToGallery() instead", ReplaceWith("saveToGallery()"))
+    fun saveToGallery(context: Context) = saveToGallery()
+
+    fun shareImage(onChooserReady: (Intent) -> Unit) {
         val currentState = _uiState.value as? MainUiState.Success ?: return
 
         viewModelScope.launch {
@@ -356,7 +401,7 @@ class MainViewModel(
                     currentState.foregroundCutout,
                     currentState.backgroundOption
                 )
-                val uri = BitmapUtils.saveBitmapForSharing(context, composite)
+                val uri = BitmapUtils.saveBitmapForSharing(getApplication(), composite)
                 if (composite != currentState.foregroundCutout) {
                     composite.recycle()
                 }
@@ -369,10 +414,16 @@ class MainViewModel(
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
-            val chooser = Intent.createChooser(sendIntent, "Поділитися зображенням")
-            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(chooser)
+            val chooser = Intent.createChooser(sendIntent, "Поділитися зображенням").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            onChooserReady(chooser)
         }
+    }
+
+    @Deprecated("Use shareImage(onChooserReady) instead")
+    fun shareImage(context: Context) {
+        shareImage { chooser -> context.startActivity(chooser) }
     }
 
     fun openMaskEditor() {

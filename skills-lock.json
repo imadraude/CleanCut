@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "android-clean-architecture": {
+      "source": "affaan-m/ecc",
+      "sourceType": "github",
+      "skillPath": "skills/android-clean-architecture/SKILL.md",
+      "computedHash": "80779b595f194a1ca3d59e36cbf4b29f426faaf90cf9c41dfd61a80442214890"
+    },
+    "compose-animations": {
+      "source": "chrisbanes/skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-animations/SKILL.md",
+      "computedHash": "fc208d321e171dcc1930a93705dab9e0ed796dcb43d1b4974dd7184f1d65adb3"
+    },
+    "compose-performance": {
+      "source": "chrisbanes/skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-performance/SKILL.md",
+      "computedHash": "c5c4df45b1ba1ce10f1e7669aff70d5c68a04963b1d51db89f76c85d9e26e24d"
+    },
+    "compose-state-and-effects": {
+      "source": "chrisbanes/skills",
+      "sourceType": "github",
+      "skillPath": "skills/compose-state-and-effects/SKILL.md",
+      "computedHash": "59092bea820bdf734a2ac4aca00c37e529c518fa269faea99899c33bb299f25e"
+    }
+  }
+}

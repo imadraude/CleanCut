@@ -54,6 +54,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -744,42 +745,44 @@ fun MaskEditorScreen(
                     }
                 }
 
-                // Precision Brush Cursor with dual contrast ring
-                currentTouchCanvasOffset?.let { touchPos ->
+                // Precision Brush Cursor with dual contrast ring: state read deferred to Draw phase
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val touchPos = currentTouchCanvasOffset ?: return@Canvas
                     if (interactionMode == InteractionMode.DRAW && !showOriginal) {
-                        val brushPx = with(density) { brushRadiusDp.dp.toPx() }
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            // Dark outer ring for clear visibility over white/light areas
-                            drawCircle(
-                                color = Color(0x66000000),
-                                radius = brushPx + 1.dp.toPx(),
-                                center = touchPos,
-                                style = Stroke(width = 3.dp.toPx())
-                            )
-                            // Colored inner ring for mode distinction
-                            drawCircle(
-                                color = when (brushMode) {
-                                    BrushMode.ERASE -> Color(0xFFFF5252) // Red
-                                    BrushMode.RESTORE -> Color(0xFF4CAF50) // Green
-                                    BrushMode.DEFRINGE -> Color(0xFF00B0FF) // Cyan
-                                },
-                                radius = brushPx,
-                                center = touchPos,
-                                style = Stroke(width = 2.dp.toPx())
-                            )
-                            // Center anchor point
-                            drawCircle(
-                                color = Color.White,
-                                radius = 2.dp.toPx(),
-                                center = touchPos
-                            )
-                        }
+                        val brushPx = brushRadiusDp.dp.toPx()
+                        // Dark outer ring for clear visibility over white/light areas
+                        drawCircle(
+                            color = Color(0x66000000),
+                            radius = brushPx + 1.dp.toPx(),
+                            center = touchPos,
+                            style = Stroke(width = 3.dp.toPx())
+                        )
+                        // Colored inner ring for mode distinction
+                        drawCircle(
+                            color = when (brushMode) {
+                                BrushMode.ERASE -> Color(0xFFFF5252) // Red
+                                BrushMode.RESTORE -> Color(0xFF4CAF50) // Green
+                                BrushMode.DEFRINGE -> Color(0xFF00B0FF) // Cyan
+                            },
+                            radius = brushPx,
+                            center = touchPos,
+                            style = Stroke(width = 2.dp.toPx())
+                        )
+                        // Center anchor point
+                        drawCircle(
+                            color = Color.White,
+                            radius = 2.dp.toPx(),
+                            center = touchPos
+                        )
                     }
                 }
 
-                // Floating Reset Zoom button when zoomed in
+                // Floating Reset Zoom button when zoomed in (derivedStateOf prevents recomposition during gesture)
+                val isZoomedOrPanned by remember {
+                    derivedStateOf { scale > 1.05f || panOffset != Offset.Zero }
+                }
                 AnimatedVisibility(
-                    visible = scale > 1.05f || panOffset != Offset.Zero,
+                    visible = isZoomedOrPanned,
                     enter = fadeIn(),
                     exit = fadeOut(),
                     modifier = Modifier

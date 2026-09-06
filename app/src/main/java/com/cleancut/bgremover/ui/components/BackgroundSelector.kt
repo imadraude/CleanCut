@@ -26,13 +26,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.cleancut.bgremover.data.util.BackgroundOption
+import com.cleancut.bgremover.domain.model.BackgroundOption
 import com.cleancut.bgremover.ui.theme.PresetBlack
 import com.cleancut.bgremover.ui.theme.PresetCleanSky
 import com.cleancut.bgremover.ui.theme.PresetLavender
@@ -41,6 +41,16 @@ import com.cleancut.bgremover.ui.theme.PresetStudioGray
 import com.cleancut.bgremover.ui.theme.PresetWarmBeige
 import com.cleancut.bgremover.ui.theme.PresetWhite
 
+private val ColorPresets = listOf(
+    PresetWhite,
+    PresetBlack,
+    PresetStudioGray,
+    PresetCleanSky,
+    PresetWarmBeige,
+    PresetMint,
+    PresetLavender
+)
+
 @Composable
 fun BackgroundSelector(
     selectedOption: BackgroundOption,
@@ -48,16 +58,6 @@ fun BackgroundSelector(
     onPickCustomImage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colorPresets = listOf(
-        PresetWhite,
-        PresetBlack,
-        PresetStudioGray,
-        PresetCleanSky,
-        PresetWarmBeige,
-        PresetMint,
-        PresetLavender
-    )
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -89,7 +89,10 @@ fun BackgroundSelector(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .scale(transScale)
+                    .graphicsLayer {
+                        scaleX = transScale
+                        scaleY = transScale
+                    }
                     .clip(CircleShape)
                     .border(
                         width = if (isTransparent) 2.5.dp else 1.dp,
@@ -123,7 +126,7 @@ fun BackgroundSelector(
             }
 
             // 2. Solid Color Presets
-            colorPresets.forEach { color ->
+            ColorPresets.forEach { color ->
                 val isSelected = selectedOption is BackgroundOption.SolidColor && selectedOption.colorArgb == color.toArgb()
                 val colorScale by animateFloatAsState(
                     targetValue = if (isSelected) 1.08f else 1f,
@@ -134,7 +137,10 @@ fun BackgroundSelector(
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .scale(colorScale)
+                        .graphicsLayer {
+                            scaleX = colorScale
+                            scaleY = colorScale
+                        }
                         .clip(CircleShape)
                         .background(color)
                         .border(
@@ -168,7 +174,10 @@ fun BackgroundSelector(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .scale(customScale)
+                    .graphicsLayer {
+                        scaleX = customScale
+                        scaleY = customScale
+                    }
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .border(

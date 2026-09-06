@@ -55,7 +55,7 @@ jobs:
         with:
           tag_name: v${{ steps.prep.outputs.version }}
           name: CleanCut v${{ steps.prep.outputs.version }}
-          body: "Реліз CleanCut v${{ steps.prep.outputs.version }}: Кешування результатів сегментації при зміні режиму, безшовне перемикання без перезапуску інтерфейсу та збереження вибраного фону."
+          body: "Реліз CleanCut v${{ steps.prep.outputs.version }}: Новий студійний логотип, адаптивні векторні іконки запуску з підтримкою Material You та нативний Android 12+ Splash Screen."
           files: ${{ steps.prep.outputs.apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

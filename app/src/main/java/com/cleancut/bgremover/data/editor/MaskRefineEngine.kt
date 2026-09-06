@@ -1,8 +1,10 @@
 package com.cleancut.bgremover.data.editor
 
 import android.graphics.Bitmap
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Brush modes for interactive mask refinement.
@@ -37,6 +39,16 @@ data class StrokePatch(
 )
 
 /**
+ * Bounding box of modified pixels returned after stroke operations.
+ */
+data class StrokeBox(
+    val minX: Int,
+    val minY: Int,
+    val maxX: Int,
+    val maxY: Int
+)
+
+/**
  * Industrial-grade interactive mask and cutout refinement engine.
  * Pure JVM/Android class optimized for 60/120 FPS touch rendering.
  */
@@ -63,6 +75,10 @@ class MaskRefineEngine(
     private var strokeMaxY = Int.MIN_VALUE
     private var strokeInitialPixels: IntArray? = null
 
+    // For smooth linear interpolation between consecutive stroke points
+    private var lastStrokeX: Int? = null
+    private var lastStrokeY: Int? = null
+
     /**
      * Begins an interactive brush stroke.
      */
@@ -74,16 +90,17 @@ class MaskRefineEngine(
         strokeMaxX = Int.MIN_VALUE
         strokeMaxY = Int.MIN_VALUE
         strokeInitialPixels = workingPixels.clone()
+        lastStrokeX = null
+        lastStrokeY = null
     }
 
-    /**
-     * Draws a circular stamp along the user's touch trajectory.
-     */
-    fun continueStroke(cx: Int, cy: Int, radius: Int, mode: BrushMode) {
-        if (!isStrokeActive) {
-            startStroke()
-        }
-
+    private fun applyCircleStamp(
+        cx: Int,
+        cy: Int,
+        radius: Int,
+        mode: BrushMode,
+        box: IntArray
+    ) {
         val r = max(1, radius)
         val r2 = r * r
 
@@ -98,6 +115,11 @@ class MaskRefineEngine(
         if (x1 > strokeMaxX) strokeMaxX = x1
         if (y0 < strokeMinY) strokeMinY = y0
         if (y1 > strokeMaxY) strokeMaxY = y1
+
+        if (x0 < box[0]) box[0] = x0
+        if (y0 < box[1]) box[1] = y0
+        if (x1 > box[2]) box[2] = x1
+        if (y1 > box[3]) box[3] = y1
 
         for (y in y0..y1) {
             val dy = y - cy
@@ -150,11 +172,55 @@ class MaskRefineEngine(
     }
 
     /**
+     * Draws a circular stamp along the user's touch trajectory with continuous interpolation.
+     * Returns the bounding box of modified pixels for efficient partial bitmap refresh.
+     */
+    fun continueStroke(cx: Int, cy: Int, radius: Int, mode: BrushMode): StrokeBox? {
+        if (!isStrokeActive) {
+            startStroke()
+        }
+
+        val box = intArrayOf(Int.MAX_VALUE, Int.MAX_VALUE, Int.MIN_VALUE, Int.MIN_VALUE)
+
+        val lx = lastStrokeX
+        val ly = lastStrokeY
+
+        if (lx != null && ly != null) {
+            val dist = hypot((cx - lx).toDouble(), (cy - ly).toDouble()).toFloat()
+            val step = max(1f, radius * 0.35f)
+            val numSteps = (dist / step).toInt()
+            if (numSteps > 1) {
+                for (i in 1..numSteps) {
+                    val t = i.toFloat() / numSteps
+                    val ix = (lx + (cx - lx) * t).roundToInt()
+                    val iy = (ly + (cy - ly) * t).roundToInt()
+                    applyCircleStamp(ix, iy, radius, mode, box)
+                }
+            } else {
+                applyCircleStamp(cx, cy, radius, mode, box)
+            }
+        } else {
+            applyCircleStamp(cx, cy, radius, mode, box)
+        }
+
+        lastStrokeX = cx
+        lastStrokeY = cy
+
+        return if (box[0] <= box[2] && box[1] <= box[3]) {
+            StrokeBox(box[0], box[1], box[2], box[3])
+        } else {
+            null
+        }
+    }
+
+    /**
      * Finalizes the stroke and registers an undo patch.
      */
     fun endStroke() {
         if (!isStrokeActive) return
         isStrokeActive = false
+        lastStrokeX = null
+        lastStrokeY = null
 
         val initial = strokeInitialPixels
         strokeInitialPixels = null
@@ -191,9 +257,25 @@ class MaskRefineEngine(
     }
 
     /**
-     * Reverts the most recent stroke.
+     * Fast partial copy of modified pixels directly into a display Bitmap.
      */
-    fun undo(): Boolean {
+    fun updateBitmapRegion(bitmap: Bitmap, minX: Int, minY: Int, maxX: Int, maxY: Int) {
+        val x0 = minX.coerceIn(0, width - 1)
+        val y0 = minY.coerceIn(0, height - 1)
+        val x1 = maxX.coerceIn(0, width - 1)
+        val y1 = maxY.coerceIn(0, height - 1)
+        val w = x1 - x0 + 1
+        val h = y1 - y0 + 1
+        if (w > 0 && h > 0) {
+            bitmap.setPixels(workingPixels, y0 * width + x0, width, x0, y0, w, h)
+        }
+    }
+
+    /**
+     * Reverts the most recent stroke.
+     * If [bitmap] is provided, updates the modified patch area directly.
+     */
+    fun undo(bitmap: Bitmap? = null): Boolean {
         if (undoStack.isEmpty()) return false
 
         val patch = undoStack.removeAt(undoStack.size - 1)
@@ -214,13 +296,18 @@ class MaskRefineEngine(
             redoStack.removeAt(0)
         }
 
+        bitmap?.let {
+            it.setPixels(workingPixels, patch.top * width + patch.left, width, patch.left, patch.top, patch.width, patch.height)
+        }
+
         return true
     }
 
     /**
      * Re-applies the most recently reverted stroke.
+     * If [bitmap] is provided, updates the modified patch area directly.
      */
-    fun redo(): Boolean {
+    fun redo(bitmap: Bitmap? = null): Boolean {
         if (redoStack.isEmpty()) return false
 
         val patch = redoStack.removeAt(redoStack.size - 1)
@@ -239,6 +326,10 @@ class MaskRefineEngine(
         undoStack.add(StrokePatch(patch.left, patch.top, patch.width, patch.height, currentPatchPixels))
         if (undoStack.size > maxHistorySteps) {
             undoStack.removeAt(0)
+        }
+
+        bitmap?.let {
+            it.setPixels(workingPixels, patch.top * width + patch.left, width, patch.left, patch.top, patch.width, patch.height)
         }
 
         return true

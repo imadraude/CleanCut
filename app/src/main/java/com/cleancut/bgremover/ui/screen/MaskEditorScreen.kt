@@ -1,14 +1,14 @@
 package com.cleancut.bgremover.ui.screen
 
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,9 +34,9 @@ import androidx.compose.material.icons.outlined.Redo
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -55,16 +56,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.cleancut.bgremover.data.editor.BrushMode
 import com.cleancut.bgremover.data.editor.MaskRefineEngine
@@ -107,17 +109,20 @@ fun MaskEditorScreen(
 
     val engine = remember { MaskRefineEngine(imgWidth, imgHeight, origPixels, cutoutPixels) }
 
-    // Version key to force Bitmap & UI refreshes after strokes / undo / redo
-    var historyRevision by remember { mutableIntStateOf(0) }
-    var currentDisplayBitmap by remember(historyRevision) {
-        mutableStateOf(engine.createCutoutBitmap())
-    }
+    // Display bitmap updated in-place for 60/120 FPS live feedback without GC thrashing
+    val displayBitmap = remember { engine.createCutoutBitmap() }
+    val displayImageBitmap = remember(displayBitmap) { displayBitmap.asImageBitmap() }
+    val originalImageBitmap = remember(originalBitmap) { originalBitmap.asImageBitmap() }
+
+    // Lightweight draw tick to trigger Canvas draw phase without recomposing the entire tree
+    var renderTick by remember { mutableIntStateOf(0) }
 
     // Editor settings
     var interactionMode by remember { mutableStateOf(InteractionMode.DRAW) }
     var brushMode by remember { mutableStateOf(BrushMode.ERASE) }
     var brushRadiusDp by remember { mutableFloatStateOf(24f) }
-    var showMaskOverlay by remember { mutableStateOf(false) }
+    var showOriginal by remember { mutableStateOf(false) }
+    var showCancelConfirmDialog by remember { mutableStateOf(false) }
 
     // Transform state (Pan & Zoom)
     var scale by remember { mutableFloatStateOf(1f) }
@@ -128,17 +133,59 @@ fun MaskEditorScreen(
 
     val density = LocalDensity.current
 
+    BackHandler {
+        if (engine.canUndo) {
+            showCancelConfirmDialog = true
+        } else {
+            onCancel()
+        }
+    }
+
+    if (showCancelConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showCancelConfirmDialog = false },
+            title = { Text("Скасувати зміни?") },
+            text = { Text("Всі внесені ручні виправлення будуть втрачені.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCancelConfirmDialog = false
+                    onCancel()
+                }) {
+                    Text(
+                        text = "Вийти",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelConfirmDialog = false }) {
+                    Text("Залишитися")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Підправити краї",
-                        style = MaterialTheme.typography.titleMedium
+                        text = "Ручна правка",
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onCancel) {
+                    IconButton(
+                        onClick = {
+                            if (engine.canUndo) {
+                                showCancelConfirmDialog = true
+                            } else {
+                                onCancel()
+                            }
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Outlined.Close,
                             contentDescription = "Скасувати"
@@ -146,11 +193,22 @@ fun MaskEditorScreen(
                     }
                 },
                 actions = {
+                    // Compare with original photo toggle
+                    IconButton(
+                        onClick = { showOriginal = !showOriginal }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Visibility,
+                            contentDescription = if (showOriginal) "Показати результат" else "Показати оригінал",
+                            tint = if (showOriginal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
                     // Undo button
                     IconButton(
                         onClick = {
-                            if (engine.undo()) {
-                                historyRevision++
+                            if (engine.undo(displayBitmap)) {
+                                renderTick++
                             }
                         },
                         enabled = engine.canUndo
@@ -164,8 +222,8 @@ fun MaskEditorScreen(
                     // Redo button
                     IconButton(
                         onClick = {
-                            if (engine.redo()) {
-                                historyRevision++
+                            if (engine.redo(displayBitmap)) {
+                                renderTick++
                             }
                         },
                         enabled = engine.canRedo
@@ -202,54 +260,92 @@ fun MaskEditorScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
-                    // Brush size slider with live value indicator
+                    // Brush size slider with live diameter preview
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
                             text = "Розмір: ${brushRadiusDp.roundToInt()} px",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.width(100.dp)
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         Slider(
                             value = brushRadiusDp,
                             onValueChange = { brushRadiusDp = it },
-                            valueRange = 8f..80f,
+                            valueRange = 6f..80f,
                             modifier = Modifier.weight(1f)
                         )
 
-                        // Reset Zoom button
-                        if (scale > 1.05f || panOffset != Offset.Zero) {
-                            IconButton(
-                                onClick = {
-                                    scale = 1f
-                                    panOffset = Offset.Zero
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.RestartAlt,
-                                    contentDescription = "Скинути масштаб"
-                                )
-                            }
+                        // Live visual brush circle
+                        Box(
+                            modifier = Modifier.size(28.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val previewRadius = (brushRadiusDp / 80f * 13f).coerceIn(2f, 13f).dp
+                            Box(
+                                modifier = Modifier
+                                    .size(previewRadius * 2)
+                                    .background(
+                                        color = when (brushMode) {
+                                            BrushMode.ERASE -> Color(0xFFFF5252)
+                                            BrushMode.RESTORE -> Color(0xFF4CAF50)
+                                            BrushMode.DEFRINGE -> Color(0xFF00B0FF)
+                                        },
+                                        shape = CircleShape
+                                    )
+                            )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                    // Tool selector row
+                    // Responsive 4-tool selector: equal weight, never clips text on any mobile screen
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Interaction toggle: Draw vs Pan/Zoom
-                        FilterChip(
+                        EditorToolItem(
+                            icon = Icons.Outlined.Delete,
+                            label = "Стерти",
+                            selected = interactionMode == InteractionMode.DRAW && brushMode == BrushMode.ERASE,
+                            onClick = {
+                                interactionMode = InteractionMode.DRAW
+                                brushMode = BrushMode.ERASE
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        EditorToolItem(
+                            icon = Icons.Outlined.Brush,
+                            label = "Відновити",
+                            selected = interactionMode == InteractionMode.DRAW && brushMode == BrushMode.RESTORE,
+                            onClick = {
+                                interactionMode = InteractionMode.DRAW
+                                brushMode = BrushMode.RESTORE
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        EditorToolItem(
+                            icon = Icons.Outlined.AutoFixHigh,
+                            label = "Дефриндж",
+                            selected = interactionMode == InteractionMode.DRAW && brushMode == BrushMode.DEFRINGE,
+                            onClick = {
+                                interactionMode = InteractionMode.DRAW
+                                brushMode = BrushMode.DEFRINGE
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        EditorToolItem(
+                            icon = Icons.Outlined.PanTool,
+                            label = "Зум",
                             selected = interactionMode == InteractionMode.PAN_ZOOM,
                             onClick = {
                                 interactionMode = if (interactionMode == InteractionMode.PAN_ZOOM) {
@@ -258,65 +354,7 @@ fun MaskEditorScreen(
                                     InteractionMode.PAN_ZOOM
                                 }
                             },
-                            label = { Text("Зум") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.PanTool,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        )
-
-                        // Brush Mode: Erase
-                        FilterChip(
-                            selected = interactionMode == InteractionMode.DRAW && brushMode == BrushMode.ERASE,
-                            onClick = {
-                                interactionMode = InteractionMode.DRAW
-                                brushMode = BrushMode.ERASE
-                            },
-                            label = { Text("Стерти") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.Delete,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        )
-
-                        // Brush Mode: Restore
-                        FilterChip(
-                            selected = interactionMode == InteractionMode.DRAW && brushMode == BrushMode.RESTORE,
-                            onClick = {
-                                interactionMode = InteractionMode.DRAW
-                                brushMode = BrushMode.RESTORE
-                            },
-                            label = { Text("Відновити") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.Brush,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        )
-
-                        // Brush Mode: Smart Defringe
-                        FilterChip(
-                            selected = interactionMode == InteractionMode.DRAW && brushMode == BrushMode.DEFRINGE,
-                            onClick = {
-                                interactionMode = InteractionMode.DRAW
-                                brushMode = BrushMode.DEFRINGE
-                            },
-                            label = { Text("Дефриндж") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.AutoFixHigh,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
@@ -334,36 +372,31 @@ fun MaskEditorScreen(
             val canvasWidth = constraints.maxWidth.toFloat()
             val canvasHeight = constraints.maxHeight.toFloat()
 
-            // Calculate exact fit bounds for the image
+            // Calculate exact fit bounds for the image inside the canvas
             val imgAspect = imgWidth.toFloat() / imgHeight.toFloat()
             val canvasAspect = canvasWidth / max(1f, canvasHeight)
 
             val fitWidth: Float
             val fitHeight: Float
-            val baseOffsetX: Float
-            val baseOffsetY: Float
 
             if (imgAspect > canvasAspect) {
                 fitWidth = canvasWidth
                 fitHeight = fitWidth / imgAspect
-                baseOffsetX = 0f
-                baseOffsetY = (canvasHeight - fitHeight) / 2f
             } else {
                 fitHeight = canvasHeight
                 fitWidth = fitHeight * imgAspect
-                baseOffsetX = (canvasWidth - fitWidth) / 2f
-                baseOffsetY = 0f
             }
 
-            // Function to map Canvas coordinate -> Image Pixel coordinate
+            val baseOffsetX = (canvasWidth - fitWidth) / 2f
+            val baseOffsetY = (canvasHeight - fitHeight) / 2f
+
+            // Map Screen/Canvas coordinate -> Image Pixel coordinate
             fun canvasToImage(canvasPt: Offset): Pair<Int, Int>? {
-                // Accounting for scale and pan relative to canvas center
                 val cx = canvasWidth / 2f
                 val cy = canvasHeight / 2f
 
-                // World coordinate before zoom centering:
-                val worldX = (canvasPt.x - cx - panOffset.x) / scale + cx
-                val worldY = (canvasPt.y - cy - panOffset.y) / scale + cy
+                val worldX = cx + (canvasPt.x - cx - panOffset.x) / scale
+                val worldY = cy + (canvasPt.y - cy - panOffset.y) / scale
 
                 val localX = worldX - baseOffsetX
                 val localY = worldY - baseOffsetY
@@ -380,46 +413,116 @@ fun MaskEditorScreen(
             fun calculateImageRadius(): Int {
                 val brushPx = with(density) { brushRadiusDp.dp.toPx() }
                 val scaleRatio = imgWidth / fitWidth
-                return ((brushPx * scaleRatio) / scale).roundToInt().coerceIn(2, max(imgWidth, imgHeight) / 4)
+                return ((brushPx * scaleRatio) / scale).roundToInt().coerceIn(1, max(imgWidth, imgHeight) / 4)
             }
 
-            // Interactive Drawing / Zoom Container
+            // Interactive Multi-touch Gesture Container
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(interactionMode) {
-                        if (interactionMode == InteractionMode.PAN_ZOOM) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                scale = (scale * zoom).coerceIn(0.8f, 8f)
-                                panOffset += pan
-                            }
-                        } else {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    currentTouchCanvasOffset = offset
-                                    canvasToImage(offset)?.let { (px, py) ->
-                                        engine.startStroke()
-                                        engine.continueStroke(px, py, calculateImageRadius(), brushMode)
+                    .pointerInput(interactionMode, brushMode, brushRadiusDp, fitWidth, fitHeight, canvasWidth, canvasHeight) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var isTransforming = false
+                            var isDrawing = false
+                            var lastCentroid = down.position
+                            var prevDistance = 0f
+
+                            do {
+                                val event = awaitPointerEvent()
+                                val pressedChanges = event.changes.filter { it.pressed }
+                                val count = pressedChanges.size
+
+                                if (count >= 2) {
+                                    // Multi-touch: simultaneous pinch-to-zoom & pan in ANY mode
+                                    if (isDrawing) {
+                                        isDrawing = false
+                                        engine.endStroke()
+                                        currentTouchCanvasOffset = null
+                                        renderTick++
                                     }
-                                },
-                                onDrag = { change, _ ->
-                                    val offset = change.position
-                                    currentTouchCanvasOffset = offset
-                                    canvasToImage(offset)?.let { (px, py) ->
-                                        engine.continueStroke(px, py, calculateImageRadius(), brushMode)
+                                    isTransforming = true
+
+                                    val p1 = pressedChanges[0].position
+                                    val p2 = pressedChanges[1].position
+                                    val centroid = (p1 + p2) / 2f
+                                    val distance = (p1 - p2).getDistance()
+
+                                    if (prevDistance > 0f) {
+                                        val zoom = distance / prevDistance
+                                        val pan = centroid - lastCentroid
+
+                                        val oldScale = scale
+                                        val newScale = (scale * zoom).coerceIn(1f, 10f)
+                                        val cx = canvasWidth / 2f
+                                        val cy = canvasHeight / 2f
+                                        val cRel = centroid - Offset(cx, cy)
+
+                                        val newPan = panOffset + (panOffset - cRel) * (newScale / oldScale - 1f) + pan
+                                        scale = newScale
+
+                                        if (newScale > 1f) {
+                                            val maxPanX = ((fitWidth * newScale - canvasWidth).coerceAtLeast(0f) / 2f) + (fitWidth * 0.25f)
+                                            val maxPanY = ((fitHeight * newScale - canvasHeight).coerceAtLeast(0f) / 2f) + (fitHeight * 0.25f)
+                                            panOffset = Offset(
+                                                newPan.x.coerceIn(-maxPanX, maxPanX),
+                                                newPan.y.coerceIn(-maxPanY, maxPanY)
+                                            )
+                                        } else {
+                                            panOffset = Offset.Zero
+                                        }
+
+                                        pressedChanges.forEach { it.consume() }
                                     }
-                                },
-                                onDragEnd = {
-                                    currentTouchCanvasOffset = null
-                                    engine.endStroke()
-                                    historyRevision++
-                                },
-                                onDragCancel = {
-                                    currentTouchCanvasOffset = null
-                                    engine.endStroke()
-                                    historyRevision++
+
+                                    lastCentroid = centroid
+                                    prevDistance = distance
+                                } else if (count == 1 && !isTransforming) {
+                                    val change = pressedChanges[0]
+                                    val pos = change.position
+
+                                    if (interactionMode == InteractionMode.PAN_ZOOM) {
+                                        val pan = pos - change.previousPosition
+                                        val newPan = panOffset + pan
+                                        if (scale > 1f) {
+                                            val maxPanX = ((fitWidth * scale - canvasWidth).coerceAtLeast(0f) / 2f) + (fitWidth * 0.25f)
+                                            val maxPanY = ((fitHeight * scale - canvasHeight).coerceAtLeast(0f) / 2f) + (fitHeight * 0.25f)
+                                            panOffset = Offset(
+                                                newPan.x.coerceIn(-maxPanX, maxPanX),
+                                                newPan.y.coerceIn(-maxPanY, maxPanY)
+                                            )
+                                        }
+                                        change.consume()
+                                    } else {
+                                        currentTouchCanvasOffset = pos
+                                        if (!isDrawing) {
+                                            isDrawing = true
+                                            engine.startStroke()
+                                        }
+                                        canvasToImage(pos)?.let { (px, py) ->
+                                            val radius = calculateImageRadius()
+                                            val modifiedBox = engine.continueStroke(px, py, radius, brushMode)
+                                            if (modifiedBox != null) {
+                                                engine.updateBitmapRegion(
+                                                    displayBitmap,
+                                                    modifiedBox.minX, modifiedBox.minY,
+                                                    modifiedBox.maxX, modifiedBox.maxY
+                                                )
+                                                renderTick++
+                                            }
+                                        }
+                                        change.consume()
+                                    }
                                 }
-                            )
+                            } while (event.changes.any { it.pressed })
+
+                            if (isDrawing) {
+                                isDrawing = false
+                                currentTouchCanvasOffset = null
+                                engine.endStroke()
+                                renderTick++
+                            }
+                            currentTouchCanvasOffset = null
                         }
                     }
             ) {
@@ -434,7 +537,6 @@ fun MaskEditorScreen(
                             translationY = panOffset.y
                         }
                 ) {
-                    // Fit image box
                     Box(
                         modifier = Modifier
                             .size(
@@ -445,27 +547,104 @@ fun MaskEditorScreen(
                     ) {
                         CheckerboardBackground()
 
-                        androidx.compose.foundation.Image(
-                            bitmap = currentDisplayBitmap.asImageBitmap(),
-                            contentDescription = "Відредагований об'єкт",
-                            modifier = Modifier.fillMaxSize()
+                        if (showOriginal) {
+                            androidx.compose.foundation.Image(
+                                bitmap = originalImageBitmap,
+                                contentDescription = "Оригінальне зображення",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Canvas(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                // Read renderTick in draw phase to invalidate without recomposition
+                                @Suppress("UNUSED_VARIABLE")
+                                val tick = renderTick
+                                drawImage(
+                                    image = displayImageBitmap,
+                                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Precision Brush Cursor with dual contrast ring
+                currentTouchCanvasOffset?.let { touchPos ->
+                    if (interactionMode == InteractionMode.DRAW && !showOriginal) {
+                        val brushPx = with(density) { brushRadiusDp.dp.toPx() }
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            // Dark outer ring for clear visibility over white/light areas
+                            drawCircle(
+                                color = Color(0x66000000),
+                                radius = brushPx + 1.dp.toPx(),
+                                center = touchPos,
+                                style = Stroke(width = 3.dp.toPx())
+                            )
+                            // Colored inner ring for mode distinction
+                            drawCircle(
+                                color = when (brushMode) {
+                                    BrushMode.ERASE -> Color(0xFFFF5252) // Red
+                                    BrushMode.RESTORE -> Color(0xFF4CAF50) // Green
+                                    BrushMode.DEFRINGE -> Color(0xFF00B0FF) // Cyan
+                                },
+                                radius = brushPx,
+                                center = touchPos,
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+                            // Center anchor point
+                            drawCircle(
+                                color = Color.White,
+                                radius = 2.dp.toPx(),
+                                center = touchPos
+                            )
+                        }
+                    }
+                }
+
+                // Floating Reset Zoom button when zoomed in
+                AnimatedVisibility(
+                    visible = scale > 1.05f || panOffset != Offset.Zero,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                ) {
+                    FilledTonalIconButton(
+                        onClick = {
+                            scale = 1f
+                            panOffset = Offset.Zero
+                        },
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.RestartAlt,
+                            contentDescription = "Скинути масштаб"
                         )
                     }
                 }
 
-                // Brush circle cursor under finger (drawn on top of everything without lag)
-                currentTouchCanvasOffset?.let { touchPos ->
-                    val brushPx = with(density) { brushRadiusDp.dp.toPx() }
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawCircle(
-                            color = when (brushMode) {
-                                BrushMode.ERASE -> Color(0xFFFF5252) // Red
-                                BrushMode.RESTORE -> Color(0xFF4CAF50) // Green
-                                BrushMode.DEFRINGE -> Color(0xFF40C4FF) // Cyan
-                            },
-                            radius = brushPx,
-                            center = touchPos,
-                            style = Stroke(width = 2.dp.toPx())
+                // Floating indicator when viewing original photo
+                AnimatedVisibility(
+                    visible = showOriginal,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+                        tonalElevation = 4.dp
+                    ) {
+                        Text(
+                            text = "Оригінал",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
                     }
                 }
@@ -473,3 +652,56 @@ fun MaskEditorScreen(
         }
     }
 }
+
+@Composable
+private fun EditorToolItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        selected = selected,
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = backgroundColor,
+        modifier = modifier.height(54.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+

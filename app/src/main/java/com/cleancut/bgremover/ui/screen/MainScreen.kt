@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cleancut.bgremover.R
 import com.cleancut.bgremover.ui.components.BackgroundSelector
@@ -467,8 +468,10 @@ private fun SuccessStateContent(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Підправити вручну (Ластик / Відновлення)",
-                style = MaterialTheme.typography.labelLarge
+                text = "Підправити краї вручну",
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
 

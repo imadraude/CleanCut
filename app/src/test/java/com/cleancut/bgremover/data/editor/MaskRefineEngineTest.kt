@@ -82,4 +82,58 @@ class MaskRefineEngineTest {
         assertTrue(engine.canUndo)
         assertFalse(engine.canRedo)
     }
+
+    @Test
+    fun testStrokeInterpolationFillsGaps() {
+        val width = 20
+        val height = 20
+        val originalPixels = IntArray(width * height) { (-0x1000000) or 0xFF0000 }
+        val cutoutPixels = IntArray(width * height) { (-0x1000000) or 0xFF0000 }
+
+        val engine = MaskRefineEngine(width, height, originalPixels, cutoutPixels)
+
+        engine.startStroke()
+        // Point 1 at (2, 5)
+        val box1 = engine.continueStroke(2, 5, radius = 1, mode = BrushMode.ERASE)
+        assertTrue(box1 != null)
+
+        // Point 2 jumped to (8, 5) without lifting finger
+        val box2 = engine.continueStroke(8, 5, radius = 1, mode = BrushMode.ERASE)
+        assertTrue(box2 != null)
+        engine.endStroke()
+
+        // With interpolation, intermediate points between 2 and 8 along row 5 must be erased
+        assertEquals(0, engine.workingPixels[5 * width + 2])
+        assertEquals(0, engine.workingPixels[5 * width + 4]) // Intermediate interpolated point
+        assertEquals(0, engine.workingPixels[5 * width + 6]) // Intermediate interpolated point
+        assertEquals(0, engine.workingPixels[5 * width + 8])
+    }
+
+    @Test
+    fun testDefringeCleansBorderSpill() {
+        val width = 10
+        val height = 10
+        val solidBlue = (-0x1000000) or 0x0000FF
+        val originalPixels = IntArray(width * height) { solidBlue }
+
+        // Construct a cutout where (5,5) has solid foreground color (Blue, alpha 255)
+        // and neighbor (5,6) has semi-transparent green background spill (Green, alpha 100)
+        val cutoutPixels = IntArray(width * height) { 0 }
+        cutoutPixels[5 * width + 5] = solidBlue
+        cutoutPixels[6 * width + 5] = (100 shl 24) or 0x00FF00 // Green halo spill
+
+        val engine = MaskRefineEngine(width, height, originalPixels, cutoutPixels)
+
+        engine.startStroke()
+        engine.continueStroke(5, 6, radius = 2, mode = BrushMode.DEFRINGE)
+        engine.endStroke()
+
+        val defringedPixel = engine.workingPixels[6 * width + 5]
+        val alpha = (defringedPixel ushr 24) and 0xFF
+        val rgb = defringedPixel and 0x00FFFFFF
+
+        // Alpha should remain preserved (~100), but RGB should borrow solid Blue (0x0000FF) from foreground
+        assertEquals(100, alpha)
+        assertEquals(0x0000FF, rgb)
+    }
 }

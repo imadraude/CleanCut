@@ -268,29 +268,13 @@ class OnnxRmbgSegmenter(
                     eps = 1e-3f
                 )
 
-                // 6. Defringing and cutout compositing
-                val pixels = IntArray(origWidth * origHeight)
-                originalBitmap.getPixels(pixels, 0, origWidth, 0, 0, origWidth, origHeight)
-
-                for (i in pixels.indices) {
-                    var alpha = refinedMask[i]
-                    alpha = when {
-                        alpha < 0.05f -> 0f
-                        alpha > 0.95f -> 1f
-                        else -> smoothstep(0.05f, 0.95f, alpha)
-                    }
-
-                    val alphaInt = (alpha * 255f).toInt().coerceIn(0, 255)
-                    if (alphaInt == 0) {
-                        pixels[i] = 0
-                    } else {
-                        pixels[i] = (alphaInt shl 24) or (pixels[i] and 0x00FFFFFF)
-                    }
-                }
-
-                val outBitmap = Bitmap.createBitmap(origWidth, origHeight, Bitmap.Config.ARGB_8888)
-                outBitmap.setPixels(pixels, 0, origWidth, 0, 0, origWidth, origHeight)
-                cutoutBitmap = outBitmap
+                // 6. Natural alpha compositing with MatteDefringer for halo-free edges
+                cutoutBitmap = MatteDefringer.createCutout(
+                    original = originalBitmap,
+                    mask = refinedMask,
+                    width = origWidth,
+                    height = origHeight
+                )
 
                 inputTensor.close()
                 results.close()

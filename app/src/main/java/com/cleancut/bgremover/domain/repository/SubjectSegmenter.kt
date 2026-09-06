@@ -7,7 +7,7 @@ import java.io.File
 
 /**
  * Deep module interface for background removal and subject segmentation.
- * Supports FAST (ML Kit + Guided Filter), STUDIO (RMBG-1.4), and ULTRA (BiRefNet).
+ * Supports FAST (ML Kit + Guided Filter), STUDIO (RMBG-1.4), ULTRA (BiRefNet), and ANIME (IS-Net Anime).
  */
 interface SubjectSegmenter {
     /**

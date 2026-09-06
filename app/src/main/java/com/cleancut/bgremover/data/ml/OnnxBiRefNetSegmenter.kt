@@ -268,29 +268,13 @@ class OnnxBiRefNetSegmenter(
                     }
                 }
 
-                // 7. Natural alpha compositing preserving fine details and hair strands
-                val pixels = IntArray(origWidth * origHeight)
-                originalBitmap.getPixels(pixels, 0, origWidth, 0, 0, origWidth, origHeight)
-
-                for (i in pixels.indices) {
-                    val alpha = rawMask[i]
-                    val finalAlpha = when {
-                        alpha < 0.01f -> 0f
-                        alpha > 0.99f -> 1f
-                        else -> alpha
-                    }
-
-                    val alphaInt = (finalAlpha * 255f + 0.5f).toInt().coerceIn(0, 255)
-                    if (alphaInt == 0) {
-                        pixels[i] = 0
-                    } else {
-                        pixels[i] = (alphaInt shl 24) or (pixels[i] and 0x00FFFFFF)
-                    }
-                }
-
-                val outBitmap = Bitmap.createBitmap(origWidth, origHeight, Bitmap.Config.ARGB_8888)
-                outBitmap.setPixels(pixels, 0, origWidth, 0, 0, origWidth, origHeight)
-                cutoutBitmap = outBitmap
+                // 7. Natural alpha compositing with MatteDefringer for halo-free edges
+                cutoutBitmap = MatteDefringer.createCutout(
+                    original = originalBitmap,
+                    mask = rawMask,
+                    width = origWidth,
+                    height = origHeight
+                )
 
                 inputTensor.close()
                 results.close()

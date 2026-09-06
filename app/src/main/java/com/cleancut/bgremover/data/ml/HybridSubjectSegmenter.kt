@@ -8,10 +8,11 @@ import com.cleancut.bgremover.domain.repository.SubjectSegmenter
 import java.io.File
 
 /**
- * Tri-tier hybrid implementation:
+ * Multi-tier hybrid implementation:
  * - FAST mode: Google ML Kit with Guided Filter edge refinement (0 MB, 50ms).
  * - STUDIO mode: Bria AI RMBG-1.4 via ONNX Runtime Mobile (~42 MB).
  * - ULTRA mode: BiRefNet-Lite via ONNX Runtime Mobile for flagship precision (~224 MB).
+ * - ANIME mode: IS-Net Anime via ONNX Runtime Mobile for 2D illustration precision (~168 MB).
  */
 class HybridSubjectSegmenter(
     context: Context
@@ -20,6 +21,7 @@ class HybridSubjectSegmenter(
     private val fastSegmenter by lazy { MlKitSubjectSegmenter() }
     private val studioSegmenter by lazy { OnnxRmbgSegmenter(context) }
     private val ultraSegmenter by lazy { OnnxBiRefNetSegmenter(context) }
+    private val animeSegmenter by lazy { OnnxIsnetAnimeSegmenter(context) }
 
     override suspend fun segment(bitmap: Bitmap, mode: SegmentationMode): Result<SegmentationResult> {
         return when (mode) {
@@ -43,6 +45,20 @@ class HybridSubjectSegmenter(
                     ultraSegmenter.segment(bitmap)
                 }
             }
+            SegmentationMode.ANIME -> {
+                if (!animeSegmenter.isModelDownloaded()) {
+                    // Fallback to ultra, studio, or fast
+                    if (ultraSegmenter.isModelDownloaded()) {
+                        ultraSegmenter.segment(bitmap)
+                    } else if (studioSegmenter.isModelDownloaded()) {
+                        studioSegmenter.segment(bitmap)
+                    } else {
+                        fastSegmenter.segment(bitmap)
+                    }
+                } else {
+                    animeSegmenter.segment(bitmap)
+                }
+            }
         }
     }
 
@@ -51,6 +67,7 @@ class HybridSubjectSegmenter(
             SegmentationMode.FAST -> true
             SegmentationMode.STUDIO -> studioSegmenter.isModelDownloaded()
             SegmentationMode.ULTRA -> ultraSegmenter.isModelDownloaded()
+            SegmentationMode.ANIME -> animeSegmenter.isModelDownloaded()
         }
     }
 
@@ -59,6 +76,7 @@ class HybridSubjectSegmenter(
             SegmentationMode.FAST -> Result.success(File(""))
             SegmentationMode.STUDIO -> studioSegmenter.downloadModel(onProgress)
             SegmentationMode.ULTRA -> ultraSegmenter.downloadModel(onProgress)
+            SegmentationMode.ANIME -> animeSegmenter.downloadModel(onProgress)
         }
     }
 
@@ -66,5 +84,6 @@ class HybridSubjectSegmenter(
         fastSegmenter.close()
         studioSegmenter.close()
         ultraSegmenter.close()
+        animeSegmenter.close()
     }
 }

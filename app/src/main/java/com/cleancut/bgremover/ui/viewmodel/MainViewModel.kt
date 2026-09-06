@@ -247,6 +247,7 @@ class MainViewModel(
                     SegmentationMode.FAST -> "Оптимізація країв Guided Filter..."
                     SegmentationMode.STUDIO -> "Студійна нейросегментація RMBG-1.4..."
                     SegmentationMode.ULTRA -> "Ультра-прецизійна сегментація BiRefNet..."
+                    SegmentationMode.ANIME -> "Аніме-сегментація IS-Net..."
                 }
                 _uiState.value = MainUiState.Processing(message)
             }

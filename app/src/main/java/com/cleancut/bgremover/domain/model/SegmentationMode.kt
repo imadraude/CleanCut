@@ -20,5 +20,11 @@ enum class SegmentationMode {
      * Ultra-precision matting using BiRefNet-Lite via ONNX Runtime Mobile.
      * Flagship accuracy for extreme details, transparent glass, and fine structures (224 MB).
      */
-    ULTRA
+    ULTRA,
+
+    /**
+     * Specialized matting for 2D anime, manga, and digital illustrations using IS-Net Anime (168 MB).
+     * Delivers razor-sharp line-art boundaries without white fringes or halos.
+     */
+    ANIME
 }

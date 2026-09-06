@@ -55,7 +55,12 @@ jobs:
         with:
           tag_name: v${{ steps.prep.outputs.version }}
           name: CleanCut v${{ steps.prep.outputs.version }}
-          body: "Реліз CleanCut v${{ steps.prep.outputs.version }}: Новий студійний логотип, адаптивні векторні іконки запуску з підтримкою Material You та нативний Android 12+ Splash Screen."
+          body: |
+            Реліз CleanCut v${{ steps.prep.outputs.version }}:
+            - Оновлено режим сегментації Ultra до моделі BiRefNet General-Lite (~224 МБ).
+            - Покращено розпізнавання складних сцен, людей, тварин та предметів без відрізання кінцівок.
+            - Природне збереження напівпрозорості пасом волосся та тонких контурів без вигризання меж.
+            - Очищено препроцесинг від артефактів штучних полів letterbox.
           files: ${{ steps.prep.outputs.apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

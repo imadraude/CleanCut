@@ -16,8 +16,7 @@ class CheckForUpdateUseCaseTest {
                 isUpdateAvailable = currentVersionName == "1.0.0",
                 latestVersionName = "1.5.0",
                 releaseNotes = "New features",
-                apkDownloadUrl = "https://example.com/app.apk",
-                apkSizeBytes = 1024L
+                apkDownloadUrl = "https://example.com/app.apk"
             )
             return Result.success(update)
         }

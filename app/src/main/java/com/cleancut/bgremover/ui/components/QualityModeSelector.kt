@@ -36,7 +36,8 @@ import com.cleancut.bgremover.domain.model.SegmentationMode
 fun QualityModeSelector(
     currentMode: SegmentationMode,
     onModeSelected: (SegmentationMode) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isSwitching: Boolean = false
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -58,17 +59,25 @@ fun QualityModeSelector(
                     .height(44.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(if (isFast) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable { onModeSelected(SegmentationMode.FAST) },
+                    .clickable(enabled = !isSwitching) { onModeSelected(SegmentationMode.FAST) },
                 contentAlignment = Alignment.Center
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Outlined.Speed,
-                        contentDescription = null,
-                        tint = if (isFast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    if (isFast && isSwitching) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.Speed,
+                            contentDescription = null,
+                            tint = if (isFast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Швидкий",
                         style = MaterialTheme.typography.labelLarge,
@@ -86,17 +95,25 @@ fun QualityModeSelector(
                     .height(44.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(if (isStudio) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable { onModeSelected(SegmentationMode.STUDIO) },
+                    .clickable(enabled = !isSwitching) { onModeSelected(SegmentationMode.STUDIO) },
                 contentAlignment = Alignment.Center
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Outlined.PhotoFilter,
-                        contentDescription = null,
-                        tint = if (isStudio) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    if (isStudio && isSwitching) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.PhotoFilter,
+                            contentDescription = null,
+                            tint = if (isStudio) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Студія",
                         style = MaterialTheme.typography.labelLarge,
@@ -114,17 +131,25 @@ fun QualityModeSelector(
                     .height(44.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(if (isUltra) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable { onModeSelected(SegmentationMode.ULTRA) },
+                    .clickable(enabled = !isSwitching) { onModeSelected(SegmentationMode.ULTRA) },
                 contentAlignment = Alignment.Center
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Outlined.Hd,
-                        contentDescription = null,
-                        tint = if (isUltra) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    if (isUltra && isSwitching) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.Hd,
+                            contentDescription = null,
+                            tint = if (isUltra) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "BiRefNet",
                         style = MaterialTheme.typography.labelLarge,

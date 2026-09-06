@@ -33,6 +33,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -368,7 +369,8 @@ private fun SuccessStateContent(
         // Mode selector allowing immediate comparison between Fast and Studio
         com.cleancut.bgremover.ui.components.QualityModeSelector(
             currentMode = currentMode,
-            onModeSelected = onModeSelected
+            onModeSelected = onModeSelected,
+            isSwitching = state.isSwitchingMode
         )
 
         // Main canvas with zoom, pan, and compare
@@ -384,6 +386,16 @@ private fun SuccessStateContent(
                 backgroundOption = state.backgroundOption,
                 modifier = Modifier.fillMaxSize()
             )
+
+            if (state.isSwitchingMode) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .height(3.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
 
         // Background presets selector

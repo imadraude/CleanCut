@@ -34,7 +34,8 @@ sealed interface MainUiState {
         val backgroundOption: BackgroundOption,
         val processingTimeMs: Long,
         val isSaving: Boolean = false,
-        val userMessage: String? = null
+        val userMessage: String? = null,
+        val isSwitchingMode: Boolean = false
     ) : MainUiState
     data class Error(val errorMessage: String) : MainUiState
 }
@@ -74,6 +75,7 @@ class MainViewModel(
     val modelDownloadState: StateFlow<ModelDownloadState> = _modelDownloadState.asStateFlow()
 
     private var currentInputBitmap: Bitmap? = null
+    private val segmentationCache = mutableMapOf<SegmentationMode, com.cleancut.bgremover.domain.model.SegmentationResult>()
 
     init {
         // Automatically check for newer releases in background on startup
@@ -81,6 +83,10 @@ class MainViewModel(
     }
 
     fun setSegmentationMode(mode: SegmentationMode) {
+        if (_segmentationMode.value == mode && _uiState.value is MainUiState.Success) {
+            return
+        }
+
         if (!segmentUseCase.isModelReady(mode)) {
             _modelDownloadState.update {
                 it.copy(showDialog = true, targetMode = mode)
@@ -90,9 +96,25 @@ class MainViewModel(
 
         _segmentationMode.value = mode
         val bitmap = currentInputBitmap
-        if (bitmap != null && _uiState.value is MainUiState.Success) {
-            // Re-process current image with the new mode
-            processBitmap(bitmap, mode)
+        val currentSuccess = _uiState.value as? MainUiState.Success
+        if (bitmap != null && currentSuccess != null) {
+            val cachedResult = segmentationCache[mode]
+            if (cachedResult != null) {
+                // Instant switch from in-memory cache without re-processing
+                val composite = BitmapUtils.compositeWithBackground(
+                    cachedResult.foregroundCutout,
+                    currentSuccess.backgroundOption
+                )
+                _uiState.value = currentSuccess.copy(
+                    foregroundCutout = cachedResult.foregroundCutout,
+                    compositeBitmap = composite,
+                    processingTimeMs = cachedResult.processingTimeMs,
+                    isSwitchingMode = false
+                )
+            } else {
+                // Not cached yet: execute segmentation for the new mode
+                processBitmap(bitmap, mode)
+            }
         }
     }
 
@@ -198,6 +220,7 @@ class MainViewModel(
 
     fun processImageUri(context: Context, uri: Uri) {
         viewModelScope.launch {
+            segmentationCache.clear()
             _uiState.value = MainUiState.Processing("Завантаження та оптимізація фотографії...")
 
             val inputBitmap = withContext(Dispatchers.IO) {
@@ -220,16 +243,23 @@ class MainViewModel(
 
     private fun processBitmap(bitmap: Bitmap, mode: SegmentationMode) {
         viewModelScope.launch {
-            val message = when (mode) {
-                SegmentationMode.FAST -> "Оптимізація країв Guided Filter..."
-                SegmentationMode.STUDIO -> "Студійна нейросегментація RMBG-1.4..."
-                SegmentationMode.ULTRA -> "Ультра-прецизійна сегментація BiRefNet..."
+            val currentSuccess = _uiState.value as? MainUiState.Success
+            val prevOption = currentSuccess?.backgroundOption ?: BackgroundOption.Transparent
+
+            if (currentSuccess != null) {
+                _uiState.value = currentSuccess.copy(isSwitchingMode = true)
+            } else {
+                val message = when (mode) {
+                    SegmentationMode.FAST -> "Оптимізація країв Guided Filter..."
+                    SegmentationMode.STUDIO -> "Студійна нейросегментація RMBG-1.4..."
+                    SegmentationMode.ULTRA -> "Ультра-прецизійна сегментація BiRefNet..."
+                }
+                _uiState.value = MainUiState.Processing(message)
             }
-            _uiState.value = MainUiState.Processing(message)
 
             val result = segmentUseCase(bitmap, mode)
             result.onSuccess { segResult ->
-                val prevOption = (_uiState.value as? MainUiState.Success)?.backgroundOption ?: BackgroundOption.Transparent
+                segmentationCache[mode] = segResult
                 val composite = BitmapUtils.compositeWithBackground(segResult.foregroundCutout, prevOption)
 
                 _uiState.value = MainUiState.Success(
@@ -237,12 +267,20 @@ class MainViewModel(
                     foregroundCutout = segResult.foregroundCutout,
                     compositeBitmap = composite,
                     backgroundOption = prevOption,
-                    processingTimeMs = segResult.processingTimeMs
+                    processingTimeMs = segResult.processingTimeMs,
+                    isSwitchingMode = false
                 )
             }.onFailure { error ->
-                _uiState.value = MainUiState.Error(
-                    error.localizedMessage ?: "Помилка при виконанні сегментації."
-                )
+                if (currentSuccess != null) {
+                    _uiState.value = currentSuccess.copy(
+                        isSwitchingMode = false,
+                        userMessage = error.localizedMessage ?: "Помилка при виконанні сегментації."
+                    )
+                } else {
+                    _uiState.value = MainUiState.Error(
+                        error.localizedMessage ?: "Помилка при виконанні сегментації."
+                    )
+                }
             }
         }
     }
@@ -255,11 +293,13 @@ class MainViewModel(
                 currentState.foregroundCutout,
                 backgroundOption
             )
-            _uiState.update {
-                currentState.copy(
-                    compositeBitmap = updatedComposite,
-                    backgroundOption = backgroundOption
-                )
+            _uiState.update { state ->
+                if (state is MainUiState.Success) {
+                    state.copy(
+                        compositeBitmap = updatedComposite,
+                        backgroundOption = backgroundOption
+                    )
+                } else state
             }
         }
     }
@@ -331,6 +371,7 @@ class MainViewModel(
     }
 
     fun reset() {
+        segmentationCache.clear()
         currentInputBitmap = null
         _uiState.value = MainUiState.Idle
     }

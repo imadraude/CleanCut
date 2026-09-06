@@ -55,7 +55,7 @@ jobs:
         with:
           tag_name: v${{ steps.prep.outputs.version }}
           name: CleanCut v${{ steps.prep.outputs.version }}
-          body: "Реліз CleanCut v${{ steps.prep.outputs.version }}: Додано постійний цифровий підпис (усуває конфлікти пакетів при оновленні), динамічний versionCode та перевірку дозволу на встановлення невідомих додатків."
+          body: "Реліз CleanCut v${{ steps.prep.outputs.version }}: Кешування результатів сегментації при зміні режиму, безшовне перемикання без перезапуску інтерфейсу та збереження вибраного фону."
           files: ${{ steps.prep.outputs.apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

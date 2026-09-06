@@ -57,10 +57,8 @@ jobs:
           name: CleanCut v${{ steps.prep.outputs.version }}
           body: |
             Реліз CleanCut v${{ steps.prep.outputs.version }}:
-            - Оновлено режим сегментації Ultra до моделі BiRefNet General-Lite (~224 МБ).
-            - Покращено розпізнавання складних сцен, людей, тварин та предметів без відрізання кінцівок.
-            - Природне збереження напівпрозорості пасом волосся та тонких контурів без вигризання меж.
-            - Очищено препроцесинг від артефактів штучних полів letterbox.
+            - Виправлено посилання на завантаження моделі Ultra BiRefNet General-Lite (усунено помилку HTTP 404).
+            - Покращено обробку редиректів (301-308) при завантаженні ваг нейромережі.
           files: ${{ steps.prep.outputs.apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

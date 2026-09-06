@@ -72,8 +72,8 @@ transform_image = transforms.Compose([
   $\text{DIS5K} + \text{HRS10K} + \text{UHRSD} + \text{P3M-10k (портрети)} + \text{Human-2k} + \text{TR-humans} + \text{AM-2k (тварини/хутро)} + \text{AIM-500} + \text{Distinctions-646} + \text{HIM2K} + \text{PPM-100}$.
 - **Офіційний та перевірений ONNX-чекпойнт**:
   У репозиторії `danielgatis/rembg` (релізний тег `v0.0.0`) опубліковано готові ONNX моделі:
-  - **`birefnet-general-lite.onnx`** (~224 МБ):
-    URL: `https://github.com/danielgatis/rembg/releases/download/v0.0.0/birefnet-general-lite.onnx`
+  - **`BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx`** (~224 МБ):
+    URL: `https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx`
     Це саме архітектура BiRefNet-Lite (Swin-v1-Tiny), але навчена на мультидоменному наборі General. Вона відмінно сегментує людей, тварин, предмети, одяг та складні сцени.
 
 ---

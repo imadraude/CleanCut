@@ -32,7 +32,7 @@ import kotlin.system.measureTimeMillis
 class OnnxBiRefNetSegmenter(
     private val context: Context
 ) {
-    private val modelUrl = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/birefnet-general-lite.onnx"
+    private val modelUrl = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx"
     private val modelFile = File(File(context.filesDir, "models").apply { mkdirs() }, "birefnet_general_lite.onnx")
 
     private var ortEnv: OrtEnvironment? = null
@@ -67,14 +67,11 @@ class OnnxBiRefNetSegmenter(
                 }
 
                 val status = connection.responseCode
-                if (status == HttpURLConnection.HTTP_MOVED_TEMP ||
-                    status == HttpURLConnection.HTTP_MOVED_PERM ||
-                    status == HttpURLConnection.HTTP_SEE_OTHER
-                ) {
+                if (status in 301..308) {
                     currentUrl = connection.getHeaderField("Location")
                         ?: throw IllegalStateException("Помилка перенаправлення завантаження моделі")
                     redirects++
-                    if (redirects > 5) throw IllegalStateException("Забагато перенаправлень")
+                    if (redirects > 10) throw IllegalStateException("Забагато перенаправлень")
                     continue
                 }
 

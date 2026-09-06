@@ -214,9 +214,11 @@ class MaskRefineEngine(
                             val alpha = (currPx ushr 24) and 0xFF
                             if (alpha > 0) {
                                 val searchR = max(3, min(6, radius / 2))
-                                var bestColor = -1
+                                var hasBestColor = false
+                                var bestColor = 0
                                 var maxAlpha = 200
-                                var fallbackColor = -1
+                                var hasFallbackColor = false
+                                var fallbackColor = 0
                                 var fallbackAlpha = alpha
                                 for (ny in max(0, y - searchR)..min(height - 1, y + searchR)) {
                                     val nRow = ny * width
@@ -227,16 +229,19 @@ class MaskRefineEngine(
                                         if (nA > maxAlpha) {
                                             maxAlpha = nA
                                             bestColor = nPx
-                                        } else if (bestColor == -1 && nA > fallbackAlpha) {
+                                            hasBestColor = true
+                                        } else if (!hasBestColor && nA > fallbackAlpha) {
                                             fallbackAlpha = nA
                                             fallbackColor = nPx
+                                            hasFallbackColor = true
                                         }
                                     }
                                 }
 
-                                val finalColor = if (bestColor != -1) bestColor else fallbackColor
-                                if (finalColor != -1) {
-                                    workingPixels[idx] = (alpha shl 24) or (finalColor and 0x00FFFFFF)
+                                if (hasBestColor) {
+                                    workingPixels[idx] = (alpha shl 24) or (bestColor and 0x00FFFFFF)
+                                } else if (hasFallbackColor) {
+                                    workingPixels[idx] = (alpha shl 24) or (fallbackColor and 0x00FFFFFF)
                                 }
                             }
                         }
@@ -315,9 +320,11 @@ class MaskRefineEngine(
                     val alpha = (currPx ushr 24) and 0xFF
                     if (alpha > 0) {
                         val searchR = max(3, min(6, radius / 2))
-                        var bestColor = -1
+                        var hasBestColor = false
+                        var bestColor = 0
                         var maxAlpha = 200
-                        var fallbackColor = -1
+                        var hasFallbackColor = false
+                        var fallbackColor = 0
                         var fallbackAlpha = alpha
                         for (ny in max(0, gy - searchR)..min(height - 1, gy + searchR)) {
                             val nRow = ny * width
@@ -328,15 +335,18 @@ class MaskRefineEngine(
                                 if (nA > maxAlpha) {
                                     maxAlpha = nA
                                     bestColor = nPx
-                                } else if (bestColor == -1 && nA > fallbackAlpha) {
+                                    hasBestColor = true
+                                } else if (!hasBestColor && nA > fallbackAlpha) {
                                     fallbackAlpha = nA
                                     fallbackColor = nPx
+                                    hasFallbackColor = true
                                 }
                             }
                         }
-                        val finalColor = if (bestColor != -1) bestColor else fallbackColor
-                        if (finalColor != -1) {
-                            workingPixels[gIdx] = (alpha shl 24) or (finalColor and 0x00FFFFFF)
+                        if (hasBestColor) {
+                            workingPixels[gIdx] = (alpha shl 24) or (bestColor and 0x00FFFFFF)
+                        } else if (hasFallbackColor) {
+                            workingPixels[gIdx] = (alpha shl 24) or (fallbackColor and 0x00FFFFFF)
                         }
                     }
                 }
@@ -526,9 +536,11 @@ class MaskRefineEngine(
                         val alpha = (currPx ushr 24) and 0xFF
                         if (alpha > 0) {
                             val searchR = 4
-                            var bestColor = -1
+                            var hasBestColor = false
+                            var bestColor = 0
                             var maxAlpha = 200
-                            var fallbackColor = -1
+                            var hasFallbackColor = false
+                            var fallbackColor = 0
                             var fallbackAlpha = alpha
                             for (ny in max(0, y - searchR)..min(height - 1, y + searchR)) {
                                 val nRow = ny * width
@@ -539,15 +551,18 @@ class MaskRefineEngine(
                                     if (nA > maxAlpha) {
                                         maxAlpha = nA
                                         bestColor = nPx
-                                    } else if (bestColor == -1 && nA > fallbackAlpha) {
+                                        hasBestColor = true
+                                    } else if (!hasBestColor && nA > fallbackAlpha) {
                                         fallbackAlpha = nA
                                         fallbackColor = nPx
+                                        hasFallbackColor = true
                                     }
                                 }
                             }
-                            val finalColor = if (bestColor != -1) bestColor else fallbackColor
-                            if (finalColor != -1) {
-                                workingPixels[idx] = (alpha shl 24) or (finalColor and 0x00FFFFFF)
+                            if (hasBestColor) {
+                                workingPixels[idx] = (alpha shl 24) or (bestColor and 0x00FFFFFF)
+                            } else if (hasFallbackColor) {
+                                workingPixels[idx] = (alpha shl 24) or (fallbackColor and 0x00FFFFFF)
                             }
                         }
                     }

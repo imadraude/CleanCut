@@ -164,6 +164,31 @@ class MaskRefineEngineTest {
     }
 
     @Test
+    fun testDefringeCleansBorderSpillOnWhiteForeground() {
+        val width = 10
+        val height = 10
+        val solidWhite = -1 // 0xFFFFFFFF
+        val originalPixels = IntArray(width * height) { solidWhite }
+
+        val cutoutPixels = IntArray(width * height) { 0 }
+        cutoutPixels[5 * width + 5] = solidWhite // Solid white foreground
+        cutoutPixels[6 * width + 5] = (100 shl 24) or 0x00FF00 // Green halo spill
+
+        val engine = MaskRefineEngine(width, height, originalPixels, cutoutPixels)
+
+        engine.startStroke()
+        engine.continueStroke(5, 6, radius = 2, mode = BrushMode.DEFRINGE)
+        engine.endStroke()
+
+        val defringedPixel = engine.workingPixels[6 * width + 5]
+        val alpha = (defringedPixel ushr 24) and 0xFF
+        val rgb = defringedPixel and 0x00FFFFFF
+
+        assertEquals(100, alpha)
+        assertEquals(0xFFFFFF, rgb)
+    }
+
+    @Test
     fun testHistoryChangedCallbackOnStrokeUndoRedo() {
         val width = 10
         val height = 10

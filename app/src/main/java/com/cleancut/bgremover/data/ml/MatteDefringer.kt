@@ -145,7 +145,8 @@ object MatteDefringer {
 
                 // Fallback foreground candidate if no pixel reaches 0.75f
                 var fallbackNeighborAlpha = alpha + 0.05f
-                var fallbackNeighborColor = -1
+                var fallbackNeighborColor = 0
+                var foundFallbackFg = false
 
                 var foundSolidFg = false
                 for (radius in 1..maxSearchRadius) {
@@ -190,6 +191,7 @@ object MatteDefringer {
                             } else if (!foundSolidFg && nAlpha > fallbackNeighborAlpha) {
                                 fallbackNeighborAlpha = nAlpha
                                 fallbackNeighborColor = origPixels[ni]
+                                foundFallbackFg = true
                             }
                         }
                     }
@@ -200,7 +202,8 @@ object MatteDefringer {
                     }
                 }
 
-                val finalNeighborColor = if (bestNeighborColor != -1) bestNeighborColor else fallbackNeighborColor
+                val hasNeighbor = foundSolidFg || foundFallbackFg
+                val finalNeighborColor = if (foundSolidFg) bestNeighborColor else fallbackNeighborColor
 
                 // Determine effective background color for this pixel
                 val effBgR = if (localBgCount > 0) localBgRSum.toFloat() / localBgCount else avgBgR
@@ -229,7 +232,7 @@ object MatteDefringer {
                 var finalG: Int
                 var finalB: Int
 
-                if (finalNeighborColor != -1) {
+                if (hasNeighbor) {
                     // Propagate genuine foreground color outward (Color Dilation / Despill)
                     finalR = (finalNeighborColor shr 16) and 0xFF
                     finalG = (finalNeighborColor shr 8) and 0xFF

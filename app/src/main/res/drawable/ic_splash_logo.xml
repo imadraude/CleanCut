@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+    <!-- Studio Badge Plate -->
+    <path
+        android:fillColor="#0F172A"
+        android:strokeColor="#1E293B"
+        android:strokeWidth="2"
+        android:pathData="M144,76 A68,68 0 1,1 143.9,76 Z" />
+    <path
+        android:fillColor="#162032"
+        android:pathData="M144,86 A58,58 0 1,1 143.9,86 Z" />
+
+    <!-- Inner Studio Canvas Frame with Clip -->
+    <group>
+        <clip-path android:pathData="M129,114 h30 c8.28,0 15,6.72 15,15 v30 c0,8.28 -6.72,15 -15,15 h-30 c-8.28,0 -15,-6.72 -15,-15 v-30 c0,-8.28 6.72,-15 15,-15 z" />
+        <!-- Left photo slate -->
+        <path
+            android:fillColor="#1E293B"
+            android:pathData="M114,114h30v60h-30z" />
+        <!-- Right checkerboard tiles (7.5x7.5 dp) -->
+        <path
+            android:fillColor="#334155"
+            android:pathData="M144,114h7.5v7.5h-7.5z M159,114h7.5v7.5h-7.5z M151.5,121.5h7.5v7.5h-7.5z M166.5,121.5h7.5v7.5h-7.5z M144,129h7.5v7.5h-7.5z M159,129h7.5v7.5h-7.5z M151.5,136.5h7.5v7.5h-7.5z M166.5,136.5h7.5v7.5h-7.5z M144,144h7.5v7.5h-7.5z M159,144h7.5v7.5h-7.5z M151.5,151.5h7.5v7.5h-7.5z M166.5,151.5h7.5v7.5h-7.5z M144,159h7.5v7.5h-7.5z M159,159h7.5v7.5h-7.5z M151.5,166.5h7.5v7.5h-7.5z M166.5,166.5h7.5v7.5h-7.5z" />
+    </group>
+
+    <!-- Canvas outline -->
+    <path
+        android:strokeColor="#475569"
+        android:strokeWidth="1.8"
+        android:pathData="M129,114 h30 c8.28,0 15,6.72 15,15 v30 c0,8.28 -6.72,15 -15,15 h-30 c-8.28,0 -15,-6.72 -15,-15 v-30 c0,-8.28 6.72,-15 15,-15 z" />
+
+    <!-- Corner Brackets -->
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M114,120v-6h6 M168,114h6v6 M114,168v6h6 M168,174h6v-6" />
+
+    <!-- Laser Cut Line -->
+    <path
+        android:strokeColor="#3B82F6"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:pathData="M144,112.5 L144,175.5" />
+    <path
+        android:fillColor="#60A5FA"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M144,109.5 A3,3 0 1,1 143.9,109.5 Z" />
+    <path
+        android:fillColor="#60A5FA"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M144,172.5 A3,3 0 1,1 143.9,172.5 Z" />
+
+    <!-- Subject Silhouette -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M144,121 A9,9 0 1,1 143.9,121 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M125,168 C127,155 134,147 144,147 C154,147 161,155 163,168 Z" />
+
+    <!-- Precision Edge Contour -->
+    <path
+        android:strokeColor="#2563EB"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:pathData="M144,121 A9,9 0 0,1 144,139" />
+    <path
+        android:strokeColor="#2563EB"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"
+        android:pathData="M144,147 C154,147 161,155 163,168" />
+</vector>

@@ -51,9 +51,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.cleancut.bgremover.R
 import com.cleancut.bgremover.ui.components.BackgroundSelector
 import com.cleancut.bgremover.ui.components.ImagePreviewArea
 import com.cleancut.bgremover.ui.viewmodel.MainUiState
@@ -132,10 +135,21 @@ fun MainScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "CleanCut",
-                        style = MaterialTheme.typography.titleLarge
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_cleancut_logo),
+                            contentDescription = null,
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Text(
+                            text = "CleanCut",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
                 },
                 navigationIcon = {
                     if (uiState !is MainUiState.Idle) {
@@ -260,16 +274,16 @@ private fun IdleStateContent(
         verticalArrangement = Arrangement.Center
     ) {
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(22.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.size(80.dp)
+            modifier = Modifier.size(88.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = Icons.Outlined.Image,
+                    painter = painterResource(R.drawable.ic_cleancut_logo),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(40.dp)
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(54.dp)
                 )
             }
         }

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash screen background for light theme -->
+    <color name="splash_background">#F8FAFC</color>
+
+    <!-- Studio Minimalist Palette -->
+    <color name="slate_900">#0F172A</color>
+    <color name="slate_800">#1E293B</color>
+    <color name="slate_700">#334155</color>
+    <color name="slate_600">#475569</color>
+    <color name="slate_500">#64748B</color>
+    <color name="slate_400">#94A3B8</color>
+    <color name="slate_200">#E2E8F0</color>
+    <color name="slate_50">#F8FAFC</color>
+    <color name="accent_blue">#2563EB</color>
+    <color name="accent_blue_light">#3B82F6</color>
+</resources>

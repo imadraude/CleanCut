@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Studio Workframe Canvas with corner clipping -->
+    <group>
+        <clip-path android:pathData="M42,30 h24 c6.63,0 12,5.37 12,12 v24 c0,6.63 -5.37,12 -12,12 h-24 c-6.63,0 -12,-5.37 -12,-12 v-24 c0,-6.63 5.37,-12 12,-12 z" />
+        <!-- Left photo background (Slate800) -->
+        <path
+            android:fillColor="#1E293B"
+            android:pathData="M30,30h48v48h-48z" />
+        <!-- Right transparency checkerboard tiles (Slate700) -->
+        <path
+            android:fillColor="#334155"
+            android:pathData="M54,30h6v6h-6z M66,30h6v6h-6z M60,36h6v6h-6z M72,36h6v6h-6z M54,42h6v6h-6z M66,42h6v6h-6z M60,48h6v6h-6z M72,48h6v6h-6z M54,54h6v6h-6z M66,54h6v6h-6z M60,60h6v6h-6z M72,60h6v6h-6z M54,66h6v6h-6z M66,66h6v6h-6z M60,72h6v6h-6z M72,72h6v6h-6z" />
+    </group>
+
+    <!-- Workframe border -->
+    <path
+        android:strokeColor="#475569"
+        android:strokeWidth="1.5"
+        android:pathData="M42,30 h24 c6.63,0 12,5.37 12,12 v24 c0,6.63 -5.37,12 -12,12 h-24 c-6.63,0 -12,-5.37 -12,-12 v-24 c0,-6.63 5.37,-12 12,-12 z" />
+
+    <!-- Studio Viewfinder / Crop Marks -->
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M30,35v-5h5 M73,30h5v5 M30,73v5h5 M73,78h5v-5" />
+
+    <!-- Laser Precision Cut Line -->
+    <path
+        android:strokeColor="#3B82F6"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M54,29 L54,79" />
+
+    <!-- Vector Anchor Nodes -->
+    <path
+        android:fillColor="#60A5FA"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="0.8"
+        android:pathData="M54,26.5 A2.5,2.5 0 1,1 53.9,26.5 Z" />
+    <path
+        android:fillColor="#60A5FA"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="0.8"
+        android:pathData="M54,76.5 A2.5,2.5 0 1,1 53.9,76.5 Z" />
+
+    <!-- Subject Silhouette (Pristine Studio White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,35.8 A7.2,7.2 0 1,1 53.9,35.8 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M39,73 C40.5,63 46,56.5 54,56.5 C62,56.5 67.5,63 69,73 Z" />
+
+    <!-- Precision Edge Cut Contour (CleanCut AccentBlue) -->
+    <path
+        android:strokeColor="#2563EB"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M54,35.8 A7.2,7.2 0 0,1 54,50.2" />
+    <path
+        android:strokeColor="#2563EB"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M54,56.5 C62,56.5 67.5,63 69,73" />
+</vector>

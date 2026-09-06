@@ -32,6 +32,8 @@ import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FormatColorFill
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material.icons.outlined.Redo
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -40,6 +42,7 @@ import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,7 +64,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -77,8 +82,15 @@ import com.cleancut.bgremover.ui.components.CheckerboardBackground
 import kotlin.math.max
 import kotlin.math.roundToInt
 
+enum class OverlayMode {
+    CHECKERBOARD,
+    RUBYLITH,
+    GHOST
+}
+
 enum class InteractionMode {
     DRAW,
+    FILL,
     PAN_ZOOM
 }
 
@@ -136,6 +148,11 @@ fun MaskEditorScreen(
     var brushRadiusDp by remember { mutableFloatStateOf(24f) }
     var showOriginal by remember { mutableStateOf(false) }
     var showCancelConfirmDialog by remember { mutableStateOf(false) }
+
+    // Smart features state
+    var overlayMode by remember { mutableStateOf(OverlayMode.CHECKERBOARD) }
+    var isEdgeAware by remember { mutableStateOf(false) }
+    var fillTolerance by remember { mutableIntStateOf(30) }
 
     // Transform state (Pan & Zoom)
     var scale by remember { mutableFloatStateOf(1f) }
@@ -206,6 +223,27 @@ fun MaskEditorScreen(
                     }
                 },
                 actions = {
+                    // Mask Overlay Mode toggle (Checkerboard -> Rubylith -> Ghost)
+                    IconButton(
+                        onClick = {
+                            overlayMode = when (overlayMode) {
+                                OverlayMode.CHECKERBOARD -> OverlayMode.RUBYLITH
+                                OverlayMode.RUBYLITH -> OverlayMode.GHOST
+                                OverlayMode.GHOST -> OverlayMode.CHECKERBOARD
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Layers,
+                            contentDescription = "Маска стертого (Рубін/Привид)",
+                            tint = when (overlayMode) {
+                                OverlayMode.CHECKERBOARD -> MaterialTheme.colorScheme.onSurfaceVariant
+                                OverlayMode.RUBYLITH -> Color(0xFFFF1744)
+                                OverlayMode.GHOST -> MaterialTheme.colorScheme.primary
+                            }
+                        )
+                    }
+
                     // Compare with original photo toggle
                     IconButton(
                         onClick = { showOriginal = !showOriginal }
@@ -275,52 +313,125 @@ fun MaskEditorScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
-                    // Brush size slider with live diameter preview
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "Розмір: ${brushRadiusDp.roundToInt()} px",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                    // Contextual controls based on active interaction mode
+                    when (interactionMode) {
+                        InteractionMode.DRAW -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Розмір: ${brushRadiusDp.roundToInt()} px",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
 
-                        Slider(
-                            value = brushRadiusDp,
-                            onValueChange = { brushRadiusDp = it },
-                            valueRange = 6f..80f,
-                            modifier = Modifier.weight(1f)
-                        )
+                                Slider(
+                                    value = brushRadiusDp,
+                                    onValueChange = { brushRadiusDp = it },
+                                    valueRange = 6f..80f,
+                                    modifier = Modifier.weight(1f)
+                                )
 
-                        // Live visual brush circle
-                        Box(
-                            modifier = Modifier.size(28.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val previewRadius = (brushRadiusDp / 80f * 13f).coerceIn(2f, 13f).dp
-                            Box(
-                                modifier = Modifier
-                                    .size(previewRadius * 2)
-                                    .background(
-                                        color = when (brushMode) {
-                                            BrushMode.ERASE -> Color(0xFFFF5252)
-                                            BrushMode.RESTORE -> Color(0xFF4CAF50)
-                                            BrushMode.DEFRINGE -> Color(0xFF00B0FF)
-                                        },
-                                        shape = CircleShape
+                                // Live visual brush circle
+                                Box(
+                                    modifier = Modifier.size(26.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val previewRadius = (brushRadiusDp / 80f * 12f).coerceIn(2f, 12f).dp
+                                    Box(
+                                        modifier = Modifier
+                                            .size(previewRadius * 2)
+                                            .background(
+                                                color = when (brushMode) {
+                                                    BrushMode.ERASE -> Color(0xFFFF5252)
+                                                    BrushMode.RESTORE -> Color(0xFF4CAF50)
+                                                    BrushMode.DEFRINGE -> Color(0xFF00B0FF)
+                                                },
+                                                shape = CircleShape
+                                            )
                                     )
-                            )
+                                }
+
+                                // Smart edge-aware toggle chip
+                                FilterChip(
+                                    selected = isEdgeAware,
+                                    onClick = {
+                                        isEdgeAware = !isEdgeAware
+                                        engine.isEdgeAware = isEdgeAware
+                                    },
+                                    label = {
+                                        Text(
+                                            text = "Край",
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.AutoFixHigh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                        InteractionMode.FILL -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Поріг: $fillTolerance%",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+
+                                Slider(
+                                    value = fillTolerance.toFloat(),
+                                    onValueChange = { fillTolerance = it.roundToInt() },
+                                    valueRange = 5f..80f,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                FilterChip(
+                                    selected = brushMode == BrushMode.ERASE,
+                                    onClick = { brushMode = BrushMode.ERASE },
+                                    label = { Text("Стерти", style = MaterialTheme.typography.labelSmall) }
+                                )
+
+                                FilterChip(
+                                    selected = brushMode == BrushMode.RESTORE,
+                                    onClick = { brushMode = BrushMode.RESTORE },
+                                    label = { Text("Відновити", style = MaterialTheme.typography.labelSmall) }
+                                )
+                            }
+                        }
+                        InteractionMode.PAN_ZOOM -> {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "Масштабуйте або переміщуйте двома пальцями",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Responsive 4-tool selector: equal weight, never clips text on any mobile screen
+                    // Responsive 5-tool selector: equal weight, never clips text on mobile screens
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         EditorToolItem(
@@ -341,6 +452,16 @@ fun MaskEditorScreen(
                             onClick = {
                                 interactionMode = InteractionMode.DRAW
                                 brushMode = BrushMode.RESTORE
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        EditorToolItem(
+                            icon = Icons.Outlined.FormatColorFill,
+                            label = "Заливка",
+                            selected = interactionMode == InteractionMode.FILL,
+                            onClick = {
+                                interactionMode = InteractionMode.FILL
                             },
                             modifier = Modifier.weight(1f)
                         )
@@ -433,7 +554,7 @@ fun MaskEditorScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(interactionMode, brushMode, brushRadiusDp, fitWidth, fitHeight, canvasWidth, canvasHeight) {
+                    .pointerInput(interactionMode, brushMode, brushRadiusDp, fillTolerance, isEdgeAware, fitWidth, fitHeight, canvasWidth, canvasHeight) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             var isTransforming = false
@@ -506,11 +627,29 @@ fun MaskEditorScreen(
                                             )
                                         }
                                         change.consume()
+                                    } else if (interactionMode == InteractionMode.FILL) {
+                                        // Tap in FILL mode executes smart flood fill
+                                        canvasToImage(pos)?.let { (px, py) ->
+                                            val box = engine.floodFill(
+                                                startX = px,
+                                                startY = py,
+                                                mode = brushMode,
+                                                tolerance = fillTolerance,
+                                                edgeSensitivity = 50,
+                                                bitmap = displayBitmap
+                                            )
+                                            if (box != null) {
+                                                renderTick++
+                                            }
+                                        }
+                                        change.consume()
                                     } else {
                                         currentTouchCanvasOffset = pos
                                         if (!isDrawing) {
                                             isDrawing = true
-                                            engine.startStroke()
+                                            canvasToImage(pos)?.let { (px, py) ->
+                                                engine.startStroke(px, py)
+                                            } ?: engine.startStroke()
                                         }
                                         canvasToImage(pos)?.let { (px, py) ->
                                             val radius = calculateImageRadius()
@@ -573,9 +712,32 @@ fun MaskEditorScreen(
                                 // Read renderTick in draw phase to invalidate without recomposition
                                 @Suppress("UNUSED_VARIABLE")
                                 val tick = renderTick
+
+                                val canvasSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+
+                                // Erased background overlay (Rubylith or Ghost original)
+                                when (overlayMode) {
+                                    OverlayMode.CHECKERBOARD -> { /* standard */ }
+                                    OverlayMode.RUBYLITH -> {
+                                        drawImage(
+                                            image = originalImageBitmap,
+                                            dstSize = canvasSize,
+                                            alpha = 0.42f,
+                                            colorFilter = ColorFilter.tint(Color(0xFFFF1744), BlendMode.SrcAtop)
+                                        )
+                                    }
+                                    OverlayMode.GHOST -> {
+                                        drawImage(
+                                            image = originalImageBitmap,
+                                            dstSize = canvasSize,
+                                            alpha = 0.35f
+                                        )
+                                    }
+                                }
+
                                 drawImage(
                                     image = displayImageBitmap,
-                                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+                                    dstSize = canvasSize
                                 )
                             }
                         }
@@ -635,6 +797,43 @@ fun MaskEditorScreen(
                             imageVector = Icons.Outlined.RestartAlt,
                             contentDescription = "Скинути масштаб"
                         )
+                    }
+                }
+
+                // Floating indicator when mask overlay is active
+                AnimatedVisibility(
+                    visible = overlayMode != OverlayMode.CHECKERBOARD && !showOriginal,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+                        tonalElevation = 4.dp
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(
+                                        color = if (overlayMode == OverlayMode.RUBYLITH) Color(0xFFFF1744) else MaterialTheme.colorScheme.primary,
+                                        shape = CircleShape
+                                    )
+                            )
+                            Text(
+                                text = if (overlayMode == OverlayMode.RUBYLITH) "Маска: Рубін" else "Маска: Привид",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
 

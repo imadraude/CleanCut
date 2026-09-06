@@ -21,6 +21,15 @@ Single-context layout (`CONTEXT.md` and `docs/adr/` at repo root). See `docs/age
   - Check status: `gh run list -L 1`
   - Watch build: `gh run watch`
 
+### Versioning & Release Management
+
+Always bump `versionName` in `app/build.gradle.kts` when delivering user-facing fixes, features, or engine changes to `main`:
+- **Patch (`x.y.Z`)**: Bug fixes, edge refinement tweaks, UI/UX polish, stability fixes.
+- **Minor (`x.Y.0`)**: New features, new capabilities, ML model/engine upgrades (e.g., new segmentation models or modes).
+- **Major (`X.0.0`)**: Fundamental architectural overhauls, major redesigns, or breaking changes.
+- **Release notes**: Update the release body in `.github/workflows/build-apk.yml` to describe user-facing changes for the new release tag.
+- **Automatic versionCode**: `versionCode` is computed automatically from Git commit count; only `versionName` needs semantic bumping.
+
 
 <!-- antislop:start -->
 ## antislop

@@ -3,6 +3,7 @@ package com.cleancut.bgremover.data.ml
 import android.graphics.Bitmap
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 
 /**
  * Industrial-grade edge defringing and matte color decontamination.

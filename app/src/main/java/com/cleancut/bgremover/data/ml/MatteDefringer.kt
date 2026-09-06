@@ -5,10 +5,13 @@ import kotlin.math.abs
 import kotlin.math.max
 
 /**
- * High-performance edge defringing and matte color decontamination.
+ * Industrial-grade edge defringing and matte color decontamination.
  *
- * Solves color bleeding and edge halos (particularly white fringes on 2D anime and illustrations)
- * by un-premultiplying background matte color bleed and suppressing phantom edge spills.
+ * Implements:
+ * 1. Adaptive Border Alpha Choke (morphological boundary erosion): cleans outer neural overshoot.
+ * 2. Edge Color Dilation (Color Bleed): purges contaminated background color from semi-transparent
+ *    edges by propagating genuine solid foreground color outward, matching Photoshop and Spine 2D standards.
+ * 3. Analytical Matte Un-premultiplication: recovers true stroke color from anti-aliasing.
  */
 object MatteDefringer {
 
@@ -50,6 +53,8 @@ object MatteDefringer {
     ): IntArray {
         val totalPixels = width * height
 
+        val origPixels = pixels.clone()
+
         // 1. Fast background color sampling from definite background pixels (mask < 0.02)
         var bgRSum = 0L
         var bgGSum = 0L
@@ -57,16 +62,16 @@ object MatteDefringer {
         var bgSampleCount = 0
 
         val step = max(1, totalPixels / 1000)
-        var idx = 0
-        while (idx < totalPixels) {
-            if (mask[idx] < 0.02f) {
-                val px = pixels[idx]
+        var sIdx = 0
+        while (sIdx < totalPixels) {
+            if (mask[sIdx] < 0.02f) {
+                val px = origPixels[sIdx]
                 bgRSum += (px shr 16) and 0xFF
                 bgGSum += (px shr 8) and 0xFF
                 bgBSum += px and 0xFF
                 bgSampleCount++
             }
-            idx += step
+            sIdx += step
         }
 
         val hasDefiniteBg = bgSampleCount >= 10
@@ -77,70 +82,124 @@ object MatteDefringer {
         val bgBrightness = 0.299f * avgBgR + 0.587f * avgBgG + 0.114f * avgBgB
         val isLightBg = hasDefiniteBg && bgBrightness > 185f
 
-        // 2. Process each pixel with decontaminator and halo suppression
-        for (i in 0 until totalPixels) {
-            val alpha = mask[i]
+        // 2. Process each pixel with Choke and Edge Color Dilation
+        for (y in 0 until height) {
+            val rowOffset = y * width
+            for (x in 0 until width) {
+                val i = rowOffset + x
+                val alpha = mask[i]
 
-            // Clear definite background
-            if (alpha < 0.02f) {
-                pixels[i] = 0
-                continue
-            }
-
-            val px = pixels[i]
-            val r = (px shr 16) and 0xFF
-            val g = (px shr 8) and 0xFF
-            val b = px and 0xFF
-
-            // Pass through solid foreground
-            if (alpha > 0.98f) {
-                pixels[i] = (-0x1000000) or (r shl 16) or (g shl 8) or b
-                continue
-            }
-
-            var finalAlpha = alpha
-            var finalR = r
-            var finalG = g
-            var finalB = b
-
-            if (isLightBg) {
-                // Color proximity to background
-                val diffR = abs(r - avgBgR)
-                val diffG = abs(g - avgBgG)
-                val diffB = abs(b - avgBgB)
-                val maxDiff = max(diffR, max(diffG, diffB))
-
-                // If pixel color is essentially identical to the light background and alpha is low-to-mid,
-                // this is an outer halo spill overshooting the outline: suppress completely.
-                if (maxDiff < 25f && alpha < 0.40f) {
+                // Definite background
+                if (alpha < 0.02f) {
                     pixels[i] = 0
                     continue
                 }
 
-                // Suppress outer boundary noise
-                if (alpha < 0.06f) {
+                val px = origPixels[i]
+                val r = (px shr 16) and 0xFF
+                val g = (px shr 8) and 0xFF
+                val b = px and 0xFF
+
+                // Definite solid foreground
+                if (alpha > 0.98f) {
+                    pixels[i] = (-0x1000000) or (r shl 16) or (g shl 8) or b
+                    continue
+                }
+
+                // --- A. Adaptive Border Alpha Choke ---
+                // Detect whether this boundary pixel touches the outer background
+                var touchesBg = false
+                if (x > 0 && mask[i - 1] < 0.05f) touchesBg = true
+                else if (x < width - 1 && mask[i + 1] < 0.05f) touchesBg = true
+                else if (y > 0 && mask[i - width] < 0.05f) touchesBg = true
+                else if (y < height - 1 && mask[i + width] < 0.05f) touchesBg = true
+
+                if (touchesBg && alpha <= 0.25f) {
                     pixels[i] = 0
                     continue
                 }
 
-                // Un-premultiply the background matte color from the observed anti-aliased edge:
-                // C = alpha * F + (1 - alpha) * B  =>  F = (C - (1 - alpha) * B) / alpha
-                val invAlpha = 1f - finalAlpha
-                finalR = ((r - invAlpha * avgBgR) / finalAlpha).toInt().coerceIn(0, 255)
-                finalG = ((g - invAlpha * avgBgG) / finalAlpha).toInt().coerceIn(0, 255)
-                finalB = ((b - invAlpha * avgBgB) / finalAlpha).toInt().coerceIn(0, 255)
-            } else {
-                if (finalAlpha < 0.03f) {
-                    pixels[i] = 0
-                    continue
+                if (isLightBg) {
+                    val diffR = abs(r - avgBgR)
+                    val diffG = abs(g - avgBgG)
+                    val diffB = abs(b - avgBgB)
+                    val maxDiff = max(diffR, max(diffG, diffB))
+                    if (maxDiff < 25f && alpha < 0.40f) {
+                        pixels[i] = 0
+                        continue
+                    }
                 }
-            }
 
-            val alphaInt = (finalAlpha * 255f + 0.5f).toInt().coerceIn(0, 255)
-            if (alphaInt == 0) {
-                pixels[i] = 0
-            } else {
-                pixels[i] = (alphaInt shl 24) or (finalR shl 16) or (finalG shl 8) or finalB
+                // --- B. Edge Color Dilation (Color Bleed) ---
+                // Purge background color contamination by pulling pure color from solid foreground (mask >= 0.80)
+                var bestNeighborAlpha = 0.80f
+                var bestNeighborColor = -1
+
+                // Search radius 1 (8 neighbors)
+                val minY1 = max(0, y - 1)
+                val maxY1 = min(height - 1, y + 1)
+                val minX1 = max(0, x - 1)
+                val maxX1 = min(width - 1, x + 1)
+
+                for (ny in minY1..maxY1) {
+                    val nRow = ny * width
+                    for (nx in minX1..maxX1) {
+                        if (nx == x && ny == y) continue
+                        val ni = nRow + nx
+                        val nAlpha = mask[ni]
+                        if (nAlpha > bestNeighborAlpha) {
+                            bestNeighborAlpha = nAlpha
+                            bestNeighborColor = origPixels[ni]
+                        }
+                    }
+                }
+
+                // If not found in radius 1, expand search to radius 2
+                if (bestNeighborColor == -1) {
+                    val minY2 = max(0, y - 2)
+                    val maxY2 = min(height - 1, y + 2)
+                    val minX2 = max(0, x - 2)
+                    val maxX2 = min(width - 1, x + 2)
+
+                    for (ny in minY2..maxY2) {
+                        val nRow = ny * width
+                        for (nx in minX2..maxX2) {
+                            if (abs(nx - x) <= 1 && abs(ny - y) <= 1) continue
+                            val ni = nRow + nx
+                            val nAlpha = mask[ni]
+                            if (nAlpha > bestNeighborAlpha) {
+                                bestNeighborAlpha = nAlpha
+                                bestNeighborColor = origPixels[ni]
+                            }
+                        }
+                    }
+                }
+
+                var finalR: Int
+                var finalG: Int
+                var finalB: Int
+
+                if (bestNeighborColor != -1) {
+                    finalR = (bestNeighborColor shr 16) and 0xFF
+                    finalG = (bestNeighborColor shr 8) and 0xFF
+                    finalB = bestNeighborColor and 0xFF
+                } else if (isLightBg) {
+                    val invAlpha = 1f - alpha
+                    finalR = ((r - invAlpha * avgBgR) / alpha).toInt().coerceIn(0, 255)
+                    finalG = ((g - invAlpha * avgBgG) / alpha).toInt().coerceIn(0, 255)
+                    finalB = ((b - invAlpha * avgBgB) / alpha).toInt().coerceIn(0, 255)
+                } else {
+                    finalR = r
+                    finalG = g
+                    finalB = b
+                }
+
+                val alphaInt = (alpha * 255f + 0.5f).toInt().coerceIn(0, 255)
+                if (alphaInt == 0) {
+                    pixels[i] = 0
+                } else {
+                    pixels[i] = (alphaInt shl 24) or (finalR shl 16) or (finalG shl 8) or finalB
+                }
             }
         }
 

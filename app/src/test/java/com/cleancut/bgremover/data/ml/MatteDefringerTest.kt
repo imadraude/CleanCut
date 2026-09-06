@@ -80,4 +80,36 @@ class MatteDefringerTest {
         val fgAlpha = (result[19] shr 24) and 0xFF
         assertEquals(255, fgAlpha)
     }
+
+    @Test
+    fun testColorDilationPurgesGreenScreenSpillFromEdge() {
+        val width = 3
+        val height = 1
+        val pixels = IntArray(width)
+        val mask = FloatArray(width)
+
+        // Pixel 0: Pure green screen background (0, 255, 0)
+        pixels[0] = (-0x1000000) or (0 shl 16) or (255 shl 8) or 0
+        mask[0] = 0.0f
+
+        // Pixel 1: Edge with green color spill (alpha = 0.6, green-tinted RGB)
+        pixels[1] = (-0x1000000) or (50 shl 16) or (200 shl 8) or 50
+        mask[1] = 0.6f
+
+        // Pixel 2: Solid brown hair foreground (139, 69, 19)
+        pixels[2] = (-0x1000000) or (139 shl 16) or (69 shl 8) or 19
+        mask[2] = 1.0f
+
+        val result = MatteDefringer.decontaminatePixels(pixels, mask, width, height)
+
+        val edgePx = result[1]
+        val edgeR = (edgePx shr 16) and 0xFF
+        val edgeG = (edgePx shr 8) and 0xFF
+        val edgeB = edgePx and 0xFF
+
+        // The edge pixel's RGB must be dilated from the solid brown hair (139, 69, 19), NOT green!
+        assertEquals("Edge R must match solid hair color", 139, edgeR)
+        assertEquals("Edge G must match solid hair color", 69, edgeG)
+        assertEquals("Edge B must match solid hair color", 19, edgeB)
+    }
 }

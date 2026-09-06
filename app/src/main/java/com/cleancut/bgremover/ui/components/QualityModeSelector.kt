@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.PhotoFilter
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme

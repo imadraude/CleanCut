@@ -381,7 +381,7 @@ private fun SuccessStateContent(
                 .padding(horizontal = 16.dp, vertical = 4.dp)
         ) {
             ImagePreviewArea(
-                displayBitmap = state.compositeBitmap,
+                displayBitmap = state.foregroundCutout,
                 originalBitmap = state.originalBitmap,
                 backgroundOption = state.backgroundOption,
                 modifier = Modifier.fillMaxSize()

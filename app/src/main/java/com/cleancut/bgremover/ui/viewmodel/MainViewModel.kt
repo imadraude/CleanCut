@@ -30,7 +30,6 @@ sealed interface MainUiState {
     data class Success(
         val originalBitmap: Bitmap,
         val foregroundCutout: Bitmap,
-        val compositeBitmap: Bitmap,
         val backgroundOption: BackgroundOption,
         val processingTimeMs: Long,
         val isSaving: Boolean = false,
@@ -100,14 +99,9 @@ class MainViewModel(
         if (bitmap != null && currentSuccess != null) {
             val cachedResult = segmentationCache[mode]
             if (cachedResult != null) {
-                // Instant switch from in-memory cache without re-processing
-                val composite = BitmapUtils.compositeWithBackground(
-                    cachedResult.foregroundCutout,
-                    currentSuccess.backgroundOption
-                )
+                // Instant switch from in-memory cache without re-processing or extra bitmap allocations
                 _uiState.value = currentSuccess.copy(
                     foregroundCutout = cachedResult.foregroundCutout,
-                    compositeBitmap = composite,
                     processingTimeMs = cachedResult.processingTimeMs,
                     isSwitchingMode = false
                 )
@@ -260,12 +254,10 @@ class MainViewModel(
             val result = segmentUseCase(bitmap, mode)
             result.onSuccess { segResult ->
                 segmentationCache[mode] = segResult
-                val composite = BitmapUtils.compositeWithBackground(segResult.foregroundCutout, prevOption)
 
                 _uiState.value = MainUiState.Success(
                     originalBitmap = segResult.originalBitmap,
                     foregroundCutout = segResult.foregroundCutout,
-                    compositeBitmap = composite,
                     backgroundOption = prevOption,
                     processingTimeMs = segResult.processingTimeMs,
                     isSwitchingMode = false
@@ -287,20 +279,13 @@ class MainViewModel(
 
     fun selectBackground(backgroundOption: BackgroundOption) {
         val currentState = _uiState.value as? MainUiState.Success ?: return
+        if (currentState.backgroundOption == backgroundOption) return
 
-        viewModelScope.launch(Dispatchers.Default) {
-            val updatedComposite = BitmapUtils.compositeWithBackground(
-                currentState.foregroundCutout,
-                backgroundOption
-            )
-            _uiState.update { state ->
-                if (state is MainUiState.Success) {
-                    state.copy(
-                        compositeBitmap = updatedComposite,
-                        backgroundOption = backgroundOption
-                    )
-                } else state
-            }
+        // Instant 0ms background switch without heavy CPU compositing or extra bitmap allocations
+        _uiState.update { state ->
+            if (state is MainUiState.Success) {
+                state.copy(backgroundOption = backgroundOption)
+            } else state
         }
     }
 
@@ -334,7 +319,15 @@ class MainViewModel(
 
         viewModelScope.launch {
             val saveResult = withContext(Dispatchers.IO) {
-                BitmapUtils.saveBitmapToGallery(context, currentState.compositeBitmap)
+                val composite = BitmapUtils.compositeWithBackground(
+                    currentState.foregroundCutout,
+                    currentState.backgroundOption
+                )
+                val result = BitmapUtils.saveBitmapToGallery(context, composite)
+                if (composite != currentState.foregroundCutout) {
+                    composite.recycle()
+                }
+                result
             }
 
             _uiState.update {
@@ -355,7 +348,15 @@ class MainViewModel(
 
         viewModelScope.launch {
             val shareUri = withContext(Dispatchers.IO) {
-                BitmapUtils.saveBitmapForSharing(context, currentState.compositeBitmap)
+                val composite = BitmapUtils.compositeWithBackground(
+                    currentState.foregroundCutout,
+                    currentState.backgroundOption
+                )
+                val uri = BitmapUtils.saveBitmapForSharing(context, composite)
+                if (composite != currentState.foregroundCutout) {
+                    composite.recycle()
+                }
+                uri
             }
 
             val sendIntent = Intent(Intent.ACTION_SEND).apply {

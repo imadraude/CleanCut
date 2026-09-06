@@ -15,6 +15,8 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -32,8 +34,10 @@ object BitmapUtils {
      * Loads a Bitmap from Uri safely, handling EXIF rotation and downsampling if larger than maxDimension.
      */
     fun loadBitmapFromUri(context: Context, uri: Uri, maxDimension: Int = 2048): Bitmap {
-        var inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+        var rawStream: InputStream? = context.contentResolver.openInputStream(uri)
             ?: throw IllegalArgumentException("Неможливо відкрити зображення за вказаним Uri")
+
+        var inputStream: InputStream? = BufferedInputStream(rawStream, 32 * 1024)
 
         // 1. Determine dimensions
         val options = BitmapFactory.Options().apply {
@@ -57,8 +61,9 @@ object BitmapUtils {
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
 
-        inputStream = context.contentResolver.openInputStream(uri)
+        rawStream = context.contentResolver.openInputStream(uri)
             ?: throw IllegalArgumentException("Неможливо повторно відкрити потік зображення")
+        inputStream = BufferedInputStream(rawStream, 32 * 1024)
         val sampledBitmap = BitmapFactory.decodeStream(inputStream, null, decodeOptions)
             ?: throw IllegalStateException("Помилка декодування зображення")
         inputStream.close()
@@ -159,9 +164,11 @@ object BitmapUtils {
             val imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
                 ?: throw IllegalStateException("Не вдалося створити запис у сховищі MediaStore")
 
-            resolver.openOutputStream(imageUri)?.use { stream ->
-                if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
-                    throw IllegalStateException("Помилка запису PNG у потік даних")
+            resolver.openOutputStream(imageUri)?.let { os ->
+                BufferedOutputStream(os, 32 * 1024).use { stream ->
+                    if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                        throw IllegalStateException("Помилка запису PNG у потік даних")
+                    }
                 }
             } ?: throw IllegalStateException("Помилка відкриття вихідного потоку MediaStore")
 
@@ -184,7 +191,7 @@ object BitmapUtils {
         val imagesFolder = File(context.cacheDir, "images").apply { mkdirs() }
         val shareFile = File(imagesFolder, "cleancut_share_${System.currentTimeMillis()}.png")
 
-        FileOutputStream(shareFile).use { stream ->
+        BufferedOutputStream(FileOutputStream(shareFile), 32 * 1024).use { stream ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
         }
 

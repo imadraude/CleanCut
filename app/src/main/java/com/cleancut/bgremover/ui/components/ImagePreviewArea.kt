@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -27,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -34,6 +34,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.cleancut.bgremover.data.util.BackgroundOption
 
+/**
+ * High-performance interactive preview canvas with hardware GPU transforms.
+ * Uses lambda graphicsLayer to eliminate recompositions during pinch-to-zoom and pan gestures.
+ * Renders background layers directly on the GPU without intermediate CPU bitmap baking.
+ */
 @Composable
 fun ImagePreviewArea(
     displayBitmap: Bitmap,
@@ -44,6 +49,9 @@ fun ImagePreviewArea(
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var showOriginal by remember { mutableStateOf(false) }
+
+    val displayImageBitmap = remember(displayBitmap) { displayBitmap.asImageBitmap() }
+    val originalImageBitmap = remember(originalBitmap) { originalBitmap.asImageBitmap() }
 
     Box(
         modifier = modifier
@@ -61,26 +69,55 @@ fun ImagePreviewArea(
             },
         contentAlignment = Alignment.Center
     ) {
-        // Transparent checkerboard underlay when transparent background option is selected and not showing original
-        if (backgroundOption is BackgroundOption.Transparent && !showOriginal) {
-            CheckerboardBackground()
-        }
-
-        val bitmapToRender = if (showOriginal) originalBitmap else displayBitmap
-
-        Image(
-            bitmap = bitmapToRender.asImageBitmap(),
-            contentDescription = if (showOriginal) "Оригінальне зображення" else "Зображення без фону",
-            contentScale = ContentScale.Fit,
+        // Zoomable container: using lambda graphicsLayer defers state reads to draw phase,
+        // avoiding full Composable recomposition on every finger movement (60/120 FPS guarantee).
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offset.x
                     translationY = offset.y
-                )
-        )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            // Layer 1: Background underlay (only when viewing cutout, not original)
+            if (!showOriginal) {
+                when (backgroundOption) {
+                    is BackgroundOption.Transparent -> {
+                        CheckerboardBackground()
+                    }
+                    is BackgroundOption.SolidColor -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(backgroundOption.colorArgb))
+                        )
+                    }
+                    is BackgroundOption.Image -> {
+                        val bgImageBitmap = remember(backgroundOption.backgroundBitmap) {
+                            backgroundOption.backgroundBitmap.asImageBitmap()
+                        }
+                        Image(
+                            bitmap = bgImageBitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
+
+            // Layer 2: Subject bitmap (original or transparent cutout)
+            val currentImage = if (showOriginal) originalImageBitmap else displayImageBitmap
+            Image(
+                bitmap = currentImage,
+                contentDescription = if (showOriginal) "Оригінальне зображення" else "Зображення без фону",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // Overlay action controls: Reset Zoom and Toggle Compare
         Box(

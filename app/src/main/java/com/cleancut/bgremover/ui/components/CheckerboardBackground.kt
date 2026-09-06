@@ -1,16 +1,22 @@
 package com.cleancut.bgremover.ui.components
 
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.Shader
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import kotlin.math.ceil
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.toArgb
 
 /**
- * Checkerboard grid pattern to visually represent transparency.
+ * GPU-accelerated Checkerboard grid pattern to visually represent transparency.
+ * Uses a hardware-tiled BitmapShader (1 GPU draw call) instead of thousands of CPU drawRect commands.
  */
 @Composable
 fun CheckerboardBackground(
@@ -19,22 +25,31 @@ fun CheckerboardBackground(
     lightColor: Color = Color(0xFFEEEEEE),
     darkColor: Color = Color(0xFFDDDDDD)
 ) {
+    val checkerboardShader = remember(squareSizePx, lightColor, darkColor) {
+        val size = (squareSizePx * 2).toInt().coerceAtLeast(2)
+        val half = size / 2
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        val paintLight = android.graphics.Paint().apply { color = lightColor.toArgb() }
+        val paintDark = android.graphics.Paint().apply { color = darkColor.toArgb() }
+
+        canvas.drawRect(0f, 0f, half.toFloat(), half.toFloat(), paintLight)
+        canvas.drawRect(half.toFloat(), 0f, size.toFloat(), half.toFloat(), paintDark)
+        canvas.drawRect(0f, half.toFloat(), half.toFloat(), size.toFloat(), paintDark)
+        canvas.drawRect(half.toFloat(), half.toFloat(), size.toFloat(), size.toFloat(), paintLight)
+
+        BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+    }
+
     Canvas(modifier = modifier.fillMaxSize()) {
-        val width = size.width
-        val height = size.height
-
-        val cols = ceil(width / squareSizePx).toInt()
-        val rows = ceil(height / squareSizePx).toInt()
-
-        for (row in 0 until rows) {
-            for (col in 0 until cols) {
-                val color = if ((row + col) % 2 == 0) lightColor else darkColor
-                drawRect(
-                    color = color,
-                    topLeft = Offset(col * squareSizePx, row * squareSizePx),
-                    size = Size(squareSizePx, squareSizePx)
-                )
+        drawIntoCanvas { canvas ->
+            val paint = Paint().apply {
+                asFrameworkPaint().shader = checkerboardShader
             }
+            canvas.drawRect(
+                Rect(0f, 0f, size.width, size.height),
+                paint
+            )
         }
     }
 }

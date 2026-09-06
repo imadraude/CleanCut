@@ -87,23 +87,18 @@ class MlKitSubjectSegmenter {
         val pixels = IntArray(width * height)
         original.getPixels(pixels, 0, width, 0, 0, width, height)
 
-        val outputPixels = IntArray(width * height)
         for (i in pixels.indices) {
             val alphaFloat = mask[i]
             val alpha = (alphaFloat * 255f).toInt().coerceIn(0, 255)
 
             if (alpha == 0) {
-                outputPixels[i] = 0
+                pixels[i] = 0
             } else {
-                val color = pixels[i]
-                val r = (color shr 16) and 0xFF
-                val g = (color shr 8) and 0xFF
-                val b = color and 0xFF
-                outputPixels[i] = (alpha shl 24) or (r shl 16) or (g shl 8) or b
+                pixels[i] = (alpha shl 24) or (pixels[i] and 0x00FFFFFF)
             }
         }
 
-        outputBitmap.setPixels(outputPixels, 0, width, 0, 0, width, height)
+        outputBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
         return outputBitmap
     }
 

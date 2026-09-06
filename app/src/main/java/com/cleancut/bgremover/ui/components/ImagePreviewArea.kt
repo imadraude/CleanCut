@@ -43,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cleancut.bgremover.domain.model.BackgroundOption
+import com.cleancut.bgremover.ui.util.ZoomTransformCalculator
 import kotlin.math.roundToInt
 
 /**
@@ -77,13 +78,18 @@ fun ImagePreviewArea(
             )
             .clipToBounds()
             .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(1f, 5f)
-                    if (scale > 1f) {
-                        offset += pan
-                    } else {
-                        offset = Offset.Zero
-                    }
+                detectTransformGestures { centroid, pan, zoom, _ ->
+                    val result = ZoomTransformCalculator.calculateTransform(
+                        currentScale = scale,
+                        currentOffset = offset,
+                        centroid = centroid,
+                        pan = pan,
+                        zoom = zoom,
+                        containerWidth = size.width.toFloat(),
+                        containerHeight = size.height.toFloat()
+                    )
+                    scale = result.scale
+                    offset = result.offset
                 }
             },
         contentAlignment = Alignment.Center

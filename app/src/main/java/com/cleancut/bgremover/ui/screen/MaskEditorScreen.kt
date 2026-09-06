@@ -591,7 +591,7 @@ fun MaskEditorScreen(
                                         val newScale = (scale * zoom).coerceIn(1f, 10f)
                                         val cx = canvasWidth / 2f
                                         val cy = canvasHeight / 2f
-                                        val cRel = centroid - Offset(cx, cy)
+                                        val cRel = lastCentroid - Offset(cx, cy)
 
                                         val newPan = panOffset + (panOffset - cRel) * (newScale / oldScale - 1f) + pan
                                         scale = newScale

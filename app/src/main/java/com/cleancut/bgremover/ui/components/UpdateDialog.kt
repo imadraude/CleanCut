@@ -35,6 +35,7 @@ fun UpdateDialog(
         onDismissRequest = {
             if (!isDownloading) onDismiss()
         },
+        shape = RoundedCornerShape(20.dp),
         title = {
             Text(
                 text = "Доступне оновлення",
@@ -77,12 +78,13 @@ fun UpdateDialog(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     LinearProgressIndicator(
                         progress = { downloadProgress / 100f },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(6.dp)
+                            .height(8.dp)
+                            .androidx.compose.ui.draw.clip(RoundedCornerShape(4.dp))
                     )
                 }
             }
@@ -91,7 +93,7 @@ fun UpdateDialog(
             Button(
                 onClick = onConfirmUpdate,
                 enabled = !isDownloading,
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.height(48.dp)
             ) {
                 Text(
@@ -104,7 +106,7 @@ fun UpdateDialog(
             if (!isDownloading) {
                 OutlinedButton(
                     onClick = onDismiss,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.height(48.dp)
                 ) {
                     Text(

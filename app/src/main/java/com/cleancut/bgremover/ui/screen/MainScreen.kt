@@ -17,21 +17,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -55,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -198,16 +205,29 @@ fun MainScreen(
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.padding(end = 8.dp)
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                            modifier = Modifier.padding(end = 6.dp)
                         ) {
-                            Text(
-                                text = "${state.processingTimeMs} мс",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Speed,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${state.processingTimeMs} мс",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
                         }
                     }
 
@@ -300,21 +320,23 @@ private fun IdleStateContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(horizontal = 20.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // Hero Icon Badge with soft glow border
         Surface(
-            shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.size(88.dp)
+            shape = RoundedCornerShape(26.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+            modifier = Modifier.size(92.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     painter = painterResource(R.drawable.ic_cleancut_logo),
                     contentDescription = null,
                     tint = Color.Unspecified,
-                    modifier = Modifier.size(54.dp)
+                    modifier = Modifier.size(56.dp)
                 )
             }
         }
@@ -331,14 +353,26 @@ private fun IdleStateContent(
         Spacer(modifier = Modifier.height(10.dp))
 
         Text(
-            text = "Локальна сегментація об'єктів на пристрої без передачі даних на сервер. Оберіть режим якості та фотографію.",
+            text = "Локальна нейромережева сегментація безпосередньо на пристрої без передачі даних у хмару.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // Feature chips row
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FeatureChip(text = "100% офлайн", icon = Icons.Outlined.Security)
+            FeatureChip(text = "До 50 мс", icon = Icons.Outlined.Speed)
+            FeatureChip(text = "HD якість", icon = Icons.Outlined.AutoFixHigh)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         com.cleancut.bgremover.ui.components.QualityModeSelector(
             currentMode = currentMode,
@@ -349,20 +383,56 @@ private fun IdleStateContent(
 
         Button(
             onClick = onPickPhoto,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier
-                .fillMaxWidth(0.85f)
-                .height(52.dp)
+                .fillMaxWidth(0.9f)
+                .height(54.dp),
+            elevation = ButtonDefaults.buttonElevation(
+                defaultElevation = 2.dp,
+                pressedElevation = 6.dp
+            )
         ) {
             Icon(
                 imageVector = Icons.Outlined.Image,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
                 text = "Вибрати зображення",
                 style = MaterialTheme.typography.titleMedium
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeatureChip(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -380,11 +450,19 @@ private fun ProcessingStateContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        CircularProgressIndicator(
-            strokeWidth = 3.dp,
-            modifier = Modifier.size(54.dp),
-            color = MaterialTheme.colorScheme.primary
-        )
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+            modifier = Modifier.size(80.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    strokeWidth = 3.5.dp,
+                    modifier = Modifier.size(46.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -392,6 +470,15 @@ private fun ProcessingStateContent(
             text = message,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Обробка нейромережею на пристрої...",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             textAlign = TextAlign.Center
         )
     }
@@ -452,12 +539,12 @@ private fun SuccessStateContent(
         )
 
         // Button to open interactive mask editor
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onOpenEditor,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp)
+                .padding(horizontal = 16.dp, vertical = 3.dp)
                 .height(48.dp)
         ) {
             Icon(
@@ -475,16 +562,16 @@ private fun SuccessStateContent(
             )
         }
 
-        // Bottom action buttons: Save PNG & Share (height 52dp, tap targets >= 44dp)
+        // Bottom action buttons: Save PNG & Share (height 52dp, tap targets >= 48dp)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
                 onClick = onShare,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .weight(1f)
                     .height(52.dp)
@@ -492,7 +579,7 @@ private fun SuccessStateContent(
                 Icon(
                     imageVector = Icons.Outlined.Share,
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -504,10 +591,14 @@ private fun SuccessStateContent(
             Button(
                 onClick = onSave,
                 enabled = !state.isSaving,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .weight(1.2f)
-                    .height(52.dp)
+                    .height(52.dp),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = 2.dp,
+                    pressedElevation = 6.dp
+                )
             ) {
                 if (state.isSaving) {
                     CircularProgressIndicator(
@@ -541,10 +632,27 @@ private fun ErrorStateContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
+            modifier = Modifier.size(76.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Outlined.ErrorOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(38.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         Text(
             text = "Виникла помилка",
             style = MaterialTheme.typography.titleLarge,
@@ -552,7 +660,7 @@ private fun ErrorStateContent(
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = errorMessage,
@@ -562,13 +670,13 @@ private fun ErrorStateContent(
             modifier = Modifier.padding(horizontal = 16.dp)
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Button(
             onClick = onRetry,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier
-                .fillMaxWidth(0.8f)
+                .fillMaxWidth(0.85f)
                 .height(52.dp)
         ) {
             Icon(

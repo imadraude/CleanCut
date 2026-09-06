@@ -1,20 +1,28 @@
 package com.cleancut.bgremover.ui.components
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -31,8 +39,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cleancut.bgremover.data.util.BackgroundOption
+import kotlin.math.roundToInt
 
 /**
  * High-performance interactive preview canvas with hardware GPU transforms.
@@ -55,7 +65,12 @@ fun ImagePreviewArea(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(20.dp)
+            )
             .clipToBounds()
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
@@ -125,36 +140,74 @@ fun ImagePreviewArea(
                 .fillMaxSize()
                 .padding(12.dp)
         ) {
-            // Reset zoom button (appears if zoomed in)
+            // Reset zoom pill with magnification indicator
             if (scale > 1.05f) {
-                FilledTonalIconButton(
-                    onClick = {
-                        scale = 1f
-                        offset = Offset.Zero
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .size(44.dp)
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+                    tonalElevation = 4.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.align(Alignment.TopStart)
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.RestartAlt,
-                        contentDescription = "Скинути масштаб"
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable {
+                                scale = 1f
+                                offset = Offset.Zero
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.RestartAlt,
+                            contentDescription = "Скинути масштаб",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${(scale * 10).roundToInt() / 10f}×",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
 
-            // Compare with original button (toggle)
-            FilledTonalIconButton(
-                onClick = { showOriginal = !showOriginal },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(44.dp)
+            // Compare with original toggle pill
+            Surface(
+                shape = CircleShape,
+                color = if (showOriginal) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+                tonalElevation = 4.dp,
+                border = BorderStroke(
+                    1.dp,
+                    if (showOriginal) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                ),
+                modifier = Modifier.align(Alignment.TopEnd)
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Visibility,
-                    contentDescription = if (showOriginal) "Показати результат" else "Показати оригінал",
-                    tint = if (showOriginal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { showOriginal = !showOriginal }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Visibility,
+                        contentDescription = null,
+                        tint = if (showOriginal) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (showOriginal) "Оригінал" else "Результат",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (showOriginal) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
     }

@@ -3,8 +3,11 @@ package com.cleancut.bgremover.ui.screen
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -661,22 +664,23 @@ private fun EditorToolItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = if (selected) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    }
-    val contentColor = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val backgroundColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        animationSpec = tween(durationMillis = 160),
+        label = "toolBg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = tween(durationMillis = 160),
+        label = "toolContent"
+    )
 
     Surface(
         selected = selected,
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
         color = backgroundColor,
+        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)) else null,
         modifier = modifier.height(54.dp)
     ) {
         Column(
@@ -696,7 +700,7 @@ private fun EditorToolItem(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 color = contentColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

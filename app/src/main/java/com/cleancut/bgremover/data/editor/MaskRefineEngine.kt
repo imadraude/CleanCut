@@ -213,24 +213,30 @@ class MaskRefineEngine(
                             val currPx = workingPixels[idx]
                             val alpha = (currPx ushr 24) and 0xFF
                             if (alpha > 0) {
-                                // Search 8-neighborhood for solid foreground pixel to borrow clean color
+                                val searchR = max(3, min(6, radius / 2))
                                 var bestColor = -1
                                 var maxAlpha = 200
-                                for (ny in max(0, y - 2)..min(height - 1, y + 2)) {
+                                var fallbackColor = -1
+                                var fallbackAlpha = alpha
+                                for (ny in max(0, y - searchR)..min(height - 1, y + searchR)) {
                                     val nRow = ny * width
-                                    for (nx in max(0, x - 2)..min(width - 1, x + 2)) {
+                                    for (nx in max(0, x - searchR)..min(width - 1, x + searchR)) {
                                         val nIdx = nRow + nx
                                         val nPx = workingPixels[nIdx]
                                         val nA = (nPx ushr 24) and 0xFF
                                         if (nA > maxAlpha) {
                                             maxAlpha = nA
                                             bestColor = nPx
+                                        } else if (bestColor == -1 && nA > fallbackAlpha) {
+                                            fallbackAlpha = nA
+                                            fallbackColor = nPx
                                         }
                                     }
                                 }
 
-                                if (bestColor != -1) {
-                                    workingPixels[idx] = (alpha shl 24) or (bestColor and 0x00FFFFFF)
+                                val finalColor = if (bestColor != -1) bestColor else fallbackColor
+                                if (finalColor != -1) {
+                                    workingPixels[idx] = (alpha shl 24) or (finalColor and 0x00FFFFFF)
                                 }
                             }
                         }
@@ -308,22 +314,29 @@ class MaskRefineEngine(
                     val currPx = workingPixels[gIdx]
                     val alpha = (currPx ushr 24) and 0xFF
                     if (alpha > 0) {
+                        val searchR = max(3, min(6, radius / 2))
                         var bestColor = -1
                         var maxAlpha = 200
-                        for (ny in max(0, gy - 2)..min(height - 1, gy + 2)) {
+                        var fallbackColor = -1
+                        var fallbackAlpha = alpha
+                        for (ny in max(0, gy - searchR)..min(height - 1, gy + searchR)) {
                             val nRow = ny * width
-                            for (nx in max(0, gx - 2)..min(width - 1, gx + 2)) {
+                            for (nx in max(0, gx - searchR)..min(width - 1, gx + searchR)) {
                                 val nIdx = nRow + nx
                                 val nPx = workingPixels[nIdx]
                                 val nA = (nPx ushr 24) and 0xFF
                                 if (nA > maxAlpha) {
                                     maxAlpha = nA
                                     bestColor = nPx
+                                } else if (bestColor == -1 && nA > fallbackAlpha) {
+                                    fallbackAlpha = nA
+                                    fallbackColor = nPx
                                 }
                             }
                         }
-                        if (bestColor != -1) {
-                            workingPixels[gIdx] = (alpha shl 24) or (bestColor and 0x00FFFFFF)
+                        val finalColor = if (bestColor != -1) bestColor else fallbackColor
+                        if (finalColor != -1) {
+                            workingPixels[gIdx] = (alpha shl 24) or (finalColor and 0x00FFFFFF)
                         }
                     }
                 }
@@ -512,22 +525,29 @@ class MaskRefineEngine(
                         val currPx = workingPixels[idx]
                         val alpha = (currPx ushr 24) and 0xFF
                         if (alpha > 0) {
+                            val searchR = 4
                             var bestColor = -1
                             var maxAlpha = 200
-                            for (ny in max(0, y - 2)..min(height - 1, y + 2)) {
+                            var fallbackColor = -1
+                            var fallbackAlpha = alpha
+                            for (ny in max(0, y - searchR)..min(height - 1, y + searchR)) {
                                 val nRow = ny * width
-                                for (nx in max(0, x - 2)..min(width - 1, x + 2)) {
+                                for (nx in max(0, x - searchR)..min(width - 1, x + searchR)) {
                                     val nIdx = nRow + nx
                                     val nPx = workingPixels[nIdx]
                                     val nA = (nPx ushr 24) and 0xFF
                                     if (nA > maxAlpha) {
                                         maxAlpha = nA
                                         bestColor = nPx
+                                    } else if (bestColor == -1 && nA > fallbackAlpha) {
+                                        fallbackAlpha = nA
+                                        fallbackColor = nPx
                                     }
                                 }
                             }
-                            if (bestColor != -1) {
-                                workingPixels[idx] = (alpha shl 24) or (bestColor and 0x00FFFFFF)
+                            val finalColor = if (bestColor != -1) bestColor else fallbackColor
+                            if (finalColor != -1) {
+                                workingPixels[idx] = (alpha shl 24) or (finalColor and 0x00FFFFFF)
                             }
                         }
                     }

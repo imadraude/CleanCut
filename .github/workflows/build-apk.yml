@@ -37,6 +37,9 @@ jobs:
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
 
+      - name: Run Unit Tests
+        run: ./gradlew testReleaseUnitTest --stacktrace
+
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace
         env:
@@ -73,19 +76,15 @@ jobs:
           name: CleanCut v${{ steps.prep.outputs.version }}
           body: |
             Реліз CleanCut v${{ steps.prep.outputs.version }}:
-            - Оптимізація продуктивності Jetpack Compose (Compose Performance):
-              • Відкладене зчитування стану жесту до фази Draw замість рекомпозиції контейнера на кожен рух пальця (гарантія 60/120 FPS).
-              • Використання `derivedStateOf` для жестів масштабування та панорамування в редакторі маски та області перегляду.
-              • Кешування об'єктів `Paint` та усунення зайвих алокацій у фазі Draw для `CheckerboardBackground`.
-              • Усунення повторних алокацій списків пресетів кольорів у `BackgroundSelector` та перехід на апаратний GPU `graphicsLayer`.
-            - Покращення архітектури (Clean Architecture & Compose State):
-              • Розділення `MainScreen` на контролер екрана та чистий, доступний для тестування `MainContent`.
-              • Плавні безшовні переходи між станами інтерфейсу за допомогою `AnimatedContent`.
-              • Дотримання принципу Single Responsibility: виокремлено `CheckModelReadyUseCase`, `DownloadModelUseCase`, `CheckForUpdateUseCase`, `DownloadApkUseCase`, `InstallApkUseCase`.
-              • Впровадження інверсії залежностей (Constructor Injection) у `MainViewModel` без прямої прив'язки до реалізацій шару Data.
-              • Очищення методів ViewModel від прямої передачі Android `Context`.
-            - Надійність та розширення тестів (TDD):
-              • Додано модульні тести для доменних UseCases.
+            - Усунення зворотного просочування кольору фону (Edge Color Decontamination & Defringing):
+              • Глибока радіальна дилатація кольору (Color Bleed) до 8 пікселів напівпрозорих країв за стандартами Photoshop і Spine 2D — чистий колір переднього плану поширюється на всю ширину переходу без залишків старого фону.
+              • Універсальний адаптивний бордер-чок (Border Alpha Choke) для будь-яких кольорів фону (зелений, синій, темний, градієнтний тощо) замість обмеження лише світлими фонами.
+              • Локальне семплювання кольору фону (Local Background Sampling) для точного аналітичного розплутування (Matte Unmixing) на неоднорідних або градієнтних фонах.
+              • Повна інтеграція MatteDefringer у FAST-режим ML Kit (раніше використовувався сирий RGB без очищення країв).
+              • Розширення інструменту ручного видалення ореолів (DEFRINGE) у редакторі маски MaskRefineEngine для ефективнішої обробки широких контурів.
+            - Тестування (TDD):
+              • Додано крок запуску модульних тестів у CI перед релізом APK.
+              • Додано регресійні тести для очищення просочування кольору на широких межах, неоднорідних фонах та зелених/синіх задніх планах.
           files: ${{ steps.prep.outputs.apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

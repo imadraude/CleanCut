@@ -100,10 +100,9 @@ object MatteDefringer {
         val avgBgG = if (hasDefiniteBg) (bgGSum / bgSampleCount).toFloat() else 255f
         val avgBgB = if (hasDefiniteBg) (bgBSum / bgSampleCount).toFloat() else 255f
 
-        val bgBrightness = 0.299f * avgBgR + 0.587f * avgBgG + 0.114f * avgBgB
-        val isLightBg = hasDefiniteBg && bgBrightness > 185f
+        val maxSearchRadius = 8
 
-        // 2. Process each pixel with Choke and Edge Color Dilation
+        // 2. Process each pixel with Choke and Deep Radial Color Dilation
         for (y in 0 until height) {
             val rowOffset = y * width
             for (x in 0 until width) {
@@ -127,92 +126,120 @@ object MatteDefringer {
                     continue
                 }
 
-                // --- A. Adaptive Border Alpha Choke ---
-                // Detect whether this boundary pixel touches the outer background
+                // Check 4-connected outer background touch
                 var touchesBg = false
                 if (x > 0 && mask[i - 1] < 0.05f) touchesBg = true
                 else if (x < width - 1 && mask[i + 1] < 0.05f) touchesBg = true
                 else if (y > 0 && mask[i - width] < 0.05f) touchesBg = true
                 else if (y < height - 1 && mask[i + width] < 0.05f) touchesBg = true
 
+                // --- A. Local Sampling & Multi-Ring Foreground Search ---
+                var bestNeighborAlpha = 0.75f
+                var bestNeighborColor = -1
+                var bestNeighborDistSq = Int.MAX_VALUE
+
+                var localBgRSum = 0
+                var localBgGSum = 0
+                var localBgBSum = 0
+                var localBgCount = 0
+
+                // Fallback foreground candidate if no pixel reaches 0.75f
+                var fallbackNeighborAlpha = alpha + 0.05f
+                var fallbackNeighborColor = -1
+
+                var foundSolidFg = false
+                for (radius in 1..maxSearchRadius) {
+                    val minY = max(0, y - radius)
+                    val maxY = min(height - 1, y + radius)
+                    val minX = max(0, x - radius)
+                    val maxX = min(width - 1, x + radius)
+
+                    for (ny in minY..maxY) {
+                        val isEdgeY = (ny == minY || ny == maxY)
+                        val nRow = ny * width
+                        for (nx in minX..maxX) {
+                            val isEdgeX = (nx == minX || nx == maxX)
+                            if (!isEdgeY && !isEdgeX) continue
+                            if (nx == x && ny == y) continue
+
+                            val ni = nRow + nx
+                            val nAlpha = mask[ni]
+
+                            // Sample local background
+                            if (nAlpha <= 0.05f) {
+                                val nPx = origPixels[ni]
+                                localBgRSum += (nPx shr 16) and 0xFF
+                                localBgGSum += (nPx shr 8) and 0xFF
+                                localBgBSum += nPx and 0xFF
+                                localBgCount++
+                            }
+
+                            // Solid foreground search (mask >= 0.75f)
+                            if (nAlpha >= 0.75f) {
+                                val dx = nx - x
+                                val dy = ny - y
+                                val distSq = dx * dx + dy * dy
+                                val nPx = origPixels[ni]
+
+                                if (!foundSolidFg || nAlpha > bestNeighborAlpha || (nAlpha == bestNeighborAlpha && distSq < bestNeighborDistSq)) {
+                                    bestNeighborAlpha = nAlpha
+                                    bestNeighborColor = nPx
+                                    bestNeighborDistSq = distSq
+                                    foundSolidFg = true
+                                }
+                            } else if (!foundSolidFg && nAlpha > fallbackNeighborAlpha) {
+                                fallbackNeighborAlpha = nAlpha
+                                fallbackNeighborColor = origPixels[ni]
+                            }
+                        }
+                    }
+
+                    // Once solid foreground is found in this ring, don't look further out for foreground
+                    if (foundSolidFg) {
+                        break
+                    }
+                }
+
+                val finalNeighborColor = if (bestNeighborColor != -1) bestNeighborColor else fallbackNeighborColor
+
+                // Determine effective background color for this pixel
+                val effBgR = if (localBgCount > 0) localBgRSum.toFloat() / localBgCount else avgBgR
+                val effBgG = if (localBgCount > 0) localBgGSum.toFloat() / localBgCount else avgBgG
+                val effBgB = if (localBgCount > 0) localBgBSum.toFloat() / localBgCount else avgBgB
+
+                // --- B. Universal Adaptive Border Alpha Choke ---
+                // 1. Direct border boundary choke for low alpha
                 if (touchesBg && alpha <= 0.25f) {
                     pixels[i] = 0
                     continue
                 }
 
-                if (isLightBg) {
-                    val diffR = abs(r - avgBgR)
-                    val diffG = abs(g - avgBgG)
-                    val diffB = abs(b - avgBgB)
-                    val maxDiff = max(diffR, max(diffG, diffB))
-                    if (maxDiff < 25f && alpha < 0.40f) {
-                        pixels[i] = 0
-                        continue
-                    }
+                // 2. Choke background overshoot across ANY background color if pixel resembles background
+                val diffBgR = abs(r - effBgR)
+                val diffBgG = abs(g - effBgG)
+                val diffBgB = abs(b - effBgB)
+                val maxBgDiff = max(diffBgR, max(diffBgG, diffBgB))
+                if (maxBgDiff < 30f && alpha < 0.40f) {
+                    pixels[i] = 0
+                    continue
                 }
 
-                // --- B. Edge Color Dilation (Color Bleed) ---
-                // Purge background color contamination by pulling pure color from solid foreground (mask >= 0.80)
-                var bestNeighborAlpha = 0.80f
-                var bestNeighborColor = -1
-
-                // Search radius 1 (8 neighbors)
-                val minY1 = max(0, y - 1)
-                val maxY1 = min(height - 1, y + 1)
-                val minX1 = max(0, x - 1)
-                val maxX1 = min(width - 1, x + 1)
-
-                for (ny in minY1..maxY1) {
-                    val nRow = ny * width
-                    for (nx in minX1..maxX1) {
-                        if (nx == x && ny == y) continue
-                        val ni = nRow + nx
-                        val nAlpha = mask[ni]
-                        if (nAlpha > bestNeighborAlpha) {
-                            bestNeighborAlpha = nAlpha
-                            bestNeighborColor = origPixels[ni]
-                        }
-                    }
-                }
-
-                // If not found in radius 1, expand search to radius 2
-                if (bestNeighborColor == -1) {
-                    val minY2 = max(0, y - 2)
-                    val maxY2 = min(height - 1, y + 2)
-                    val minX2 = max(0, x - 2)
-                    val maxX2 = min(width - 1, x + 2)
-
-                    for (ny in minY2..maxY2) {
-                        val nRow = ny * width
-                        for (nx in minX2..maxX2) {
-                            if (abs(nx - x) <= 1 && abs(ny - y) <= 1) continue
-                            val ni = nRow + nx
-                            val nAlpha = mask[ni]
-                            if (nAlpha > bestNeighborAlpha) {
-                                bestNeighborAlpha = nAlpha
-                                bestNeighborColor = origPixels[ni]
-                            }
-                        }
-                    }
-                }
-
+                // --- C. True Color Recovery & Edge Decontamination ---
                 var finalR: Int
                 var finalG: Int
                 var finalB: Int
 
-                if (bestNeighborColor != -1) {
-                    finalR = (bestNeighborColor shr 16) and 0xFF
-                    finalG = (bestNeighborColor shr 8) and 0xFF
-                    finalB = bestNeighborColor and 0xFF
-                } else if (isLightBg) {
-                    val invAlpha = 1f - alpha
-                    finalR = ((r - invAlpha * avgBgR) / alpha).toInt().coerceIn(0, 255)
-                    finalG = ((g - invAlpha * avgBgG) / alpha).toInt().coerceIn(0, 255)
-                    finalB = ((b - invAlpha * avgBgB) / alpha).toInt().coerceIn(0, 255)
+                if (finalNeighborColor != -1) {
+                    // Propagate genuine foreground color outward (Color Dilation / Despill)
+                    finalR = (finalNeighborColor shr 16) and 0xFF
+                    finalG = (finalNeighborColor shr 8) and 0xFF
+                    finalB = finalNeighborColor and 0xFF
                 } else {
-                    finalR = r
-                    finalG = g
-                    finalB = b
+                    // Analytical Matte Un-mixing using effective local background
+                    val invAlpha = 1f - alpha
+                    finalR = ((r - invAlpha * effBgR) / alpha).toInt().coerceIn(0, 255)
+                    finalG = ((g - invAlpha * effBgG) / alpha).toInt().coerceIn(0, 255)
+                    finalB = ((b - invAlpha * effBgB) / alpha).toInt().coerceIn(0, 255)
                 }
 
                 val alphaInt = (alpha * 255f + 0.5f).toInt().coerceIn(0, 255)

@@ -52,11 +52,22 @@ class MlKitSubjectSegmenter {
                         eps = 1e-3f
                     )
 
-                    // 3. Composite cutout with defringing
+                    // 3. Composite cutout with industrial-grade defringing & color decontamination
                     cutoutBitmap = applyRefinedMaskWithDefringing(bitmap, refinedMask)
                 } else {
-                    // Fallback to direct foreground if mask buffer is unavailable
-                    cutoutBitmap = segmentationResult.foregroundBitmap
+                    // Fallback to direct foreground with defringing if raw mask buffer is unavailable
+                    val fgBmp = segmentationResult.foregroundBitmap
+                    if (fgBmp != null) {
+                        val w = fgBmp.width
+                        val h = fgBmp.height
+                        val fgPixels = IntArray(w * h)
+                        fgBmp.getPixels(fgPixels, 0, w, 0, 0, w, h)
+                        val extractedMask = FloatArray(w * h)
+                        for (idx in fgPixels.indices) {
+                            extractedMask[idx] = ((fgPixels[idx] ushr 24) and 0xFF) / 255f
+                        }
+                        cutoutBitmap = MatteDefringer.createCutout(bitmap, extractedMask, w, h)
+                    }
                 }
             }
 
@@ -80,26 +91,12 @@ class MlKitSubjectSegmenter {
      * Applies refined mask and suppresses background color bleed along edges (defringing).
      */
     private fun applyRefinedMaskWithDefringing(original: Bitmap, mask: FloatArray): Bitmap {
-        val width = original.width
-        val height = original.height
-        val outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-
-        val pixels = IntArray(width * height)
-        original.getPixels(pixels, 0, width, 0, 0, width, height)
-
-        for (i in pixels.indices) {
-            val alphaFloat = mask[i]
-            val alpha = (alphaFloat * 255f).toInt().coerceIn(0, 255)
-
-            if (alpha == 0) {
-                pixels[i] = 0
-            } else {
-                pixels[i] = (alpha shl 24) or (pixels[i] and 0x00FFFFFF)
-            }
-        }
-
-        outputBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
-        return outputBitmap
+        return MatteDefringer.createCutout(
+            original = original,
+            mask = mask,
+            width = original.width,
+            height = original.height
+        )
     }
 
     fun close() {

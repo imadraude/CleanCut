@@ -73,6 +73,9 @@ class MainViewModel(
     private val _modelDownloadState = MutableStateFlow(ModelDownloadState())
     val modelDownloadState: StateFlow<ModelDownloadState> = _modelDownloadState.asStateFlow()
 
+    private val _isEditingMask = MutableStateFlow(false)
+    val isEditingMask: StateFlow<Boolean> = _isEditingMask.asStateFlow()
+
     private var currentInputBitmap: Bitmap? = null
     private val segmentationCache = mutableMapOf<SegmentationMode, com.cleancut.bgremover.domain.model.SegmentationResult>()
 
@@ -372,9 +375,37 @@ class MainViewModel(
         }
     }
 
+    fun openMaskEditor() {
+        if (_uiState.value is MainUiState.Success) {
+            _isEditingMask.value = true
+        }
+    }
+
+    fun closeMaskEditor() {
+        _isEditingMask.value = false
+    }
+
+    fun applyRefinedMask(refinedCutout: Bitmap) {
+        val currentSuccess = _uiState.value as? MainUiState.Success ?: return
+        val currentMode = _segmentationMode.value
+
+        _uiState.value = currentSuccess.copy(
+            foregroundCutout = refinedCutout,
+            userMessage = "Маску успішно відкориговано"
+        )
+
+        val cached = segmentationCache[currentMode]
+        if (cached != null) {
+            segmentationCache[currentMode] = cached.copy(foregroundCutout = refinedCutout)
+        }
+
+        _isEditingMask.value = false
+    }
+
     fun reset() {
         segmentationCache.clear()
         currentInputBitmap = null
+        _isEditingMask.value = false
         _uiState.value = MainUiState.Idle
     }
 

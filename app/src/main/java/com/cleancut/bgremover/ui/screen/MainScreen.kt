@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Image
@@ -129,6 +130,23 @@ fun MainScreen(
         )
     }
 
+    val isEditingMask by viewModel.isEditingMask.collectAsState()
+
+    if (isEditingMask && uiState is MainUiState.Success) {
+        val successState = uiState as MainUiState.Success
+        MaskEditorScreen(
+            originalBitmap = successState.originalBitmap,
+            initialCutoutBitmap = successState.foregroundCutout,
+            onApply = { refinedCutout ->
+                viewModel.applyRefinedMask(refinedCutout)
+            },
+            onCancel = {
+                viewModel.closeMaskEditor()
+            }
+        )
+        return
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -167,6 +185,17 @@ fun MainScreen(
                 actions = {
                     if (uiState is MainUiState.Success) {
                         val state = uiState as MainUiState.Success
+                        IconButton(
+                            onClick = { viewModel.openMaskEditor() },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.AutoFixHigh,
+                                contentDescription = "Підправити краї",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -240,7 +269,8 @@ fun MainScreen(
                             )
                         },
                         onSave = { viewModel.saveToGallery(context) },
-                        onShare = { viewModel.shareImage(context) }
+                        onShare = { viewModel.shareImage(context) },
+                        onOpenEditor = { viewModel.openMaskEditor() }
                     )
                 }
 
@@ -375,6 +405,7 @@ private fun SuccessStateContent(
     onPickCustomBg: () -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
+    onOpenEditor: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -418,6 +449,28 @@ private fun SuccessStateContent(
             onOptionSelected = onSelectBackground,
             onPickCustomImage = onPickCustomBg
         )
+
+        // Button to open interactive mask editor
+        OutlinedButton(
+            onClick = onOpenEditor,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp)
+                .height(48.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.AutoFixHigh,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Підправити вручну (Ластик / Відновлення)",
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
 
         // Bottom action buttons: Save PNG & Share (height 52dp, tap targets >= 44dp)
         Row(
